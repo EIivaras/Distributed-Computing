@@ -51,3 +51,9 @@ echo $JAVA '-cp .:gen-java/:"lib/*":"jBCrypt-0.4/*" FENode 10123'
 echo $JAVA '-cp .:gen-java/:"lib/*":"jBCrypt-0.4/*" BENode localhost 10123 10124'
 echo $JAVA '-cp .:gen-java/:"lib/*":"jBCrypt-0.4/*" Client localhost 10123 hello'
 
+# IMPORTANT: THE SYSTEM SHOULD STILL WORK IF I START THE BACKEND FIRST WITHOUT THE FRONTEND
+# --> If connection refused because frontend not running, wait a little bit and then try reconnecting
+
+# NOTE: WHEN RUNNING INSTANCES OF FE_NODE AND BE_NODE, MAKE SURE YOU SWITCH PORT TO INCLUDE
+# LAST THREE DIGITS OF STUDENT NUMBER TO AVOID CONFLICTS
+# --> Note that port #s need to remain between 10000 and 11000

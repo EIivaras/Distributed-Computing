@@ -1,3 +1,5 @@
+// FEEL FREE TO ADD STUFF BUT DO NOT REMOVE ANYTHING
+
 exception IllegalArgument {
   1: string message;
 }

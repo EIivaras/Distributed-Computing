@@ -9,6 +9,8 @@ import org.apache.thrift.transport.TSocket;
 import org.apache.thrift.transport.TFramedTransport;
 import org.apache.thrift.transport.TTransportFactory;
 
+// NOTE: MAY NEED TO EDIT CLIENT TO COVER MORE TEST CASES
+
 public class Client {
     public static void main(String [] args) {
 	if (args.length != 3) {
@@ -30,14 +32,34 @@ public class Client {
 	    System.out.println("Hash: " + hash.get(0));
 	    System.out.println("Positive check: " + client.checkPassword(password, hash));
 	    hash.set(0, "$2a$14$reBHJvwbb0UWqJHLyPTVF.6Ld5sFRirZx/bXMeMmeurJledKYdZmG");
-	    System.out.println("Negative check: " + client.checkPassword(password, hash));
+		System.out.println("Negative check: " + client.checkPassword(password, hash));
+		
+		// NOTE: We /want/ the exception to be thrown here
 	    try {
-		hash.set(0, "too short");
-		List<Boolean> rets = client.checkPassword(password, hash);
-		System.out.println("Exception check: no exception thrown");
+			hash.set(0, "too short");
+			List<Boolean> rets = client.checkPassword(password, hash);
+			System.out.println("Exception check: no exception thrown");
 	    } catch (Exception e) {
-		System.out.println("Exception check: exception thrown");
-	    }
+			System.out.println("Exception check: exception thrown");
+		}
+		
+		// ~~~~~~~~~~~~ Added Test Cases ~~~~~~~~~~~~ //
+
+		// Test Case 1: Multiple hashes
+
+		List<String> passwords = new ArrayList<>();
+		passwords.add("Hype");
+		passwords.add("Hype2");
+		passwords.add("Hype3");
+		List<String> hashes = client.hashPassword(passwords, (short)10);
+
+		try {
+			client.checkPassword(passwords, hashes);
+			System.out.println("Test case 1 success!");
+		} catch (Exception e) {
+			System.out.println("Test case 1 failure.");
+			System.out.println(e.getMessage());
+		}
 
 	    transport.close();
 	} catch (TException x) {
