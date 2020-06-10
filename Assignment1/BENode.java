@@ -37,7 +37,15 @@ public class BENode {
 	TTransport transport = new TFramedTransport(sock);
 	TProtocol protocol = new TBinaryProtocol(transport);
 	BcryptService.Client client = new BcryptService.Client(protocol);
-	transport.open();
+
+	while (true){
+		try {
+			transport.open();
+			break;
+		} catch (Exception e) {
+			// If FE is offline, keep looping until it comes online.
+		}
+	}
 
 	// Talk to front end
 
