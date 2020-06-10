@@ -11,6 +11,8 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 
 	private List<String> hostList = new ArrayList<String>();
 	private List<Integer> portList = new ArrayList<Integer>();
+	// TODO: Verify that we can even declare a list of this, or if thrift complains?
+	// private List<BcryptService.Client> clientList = new ArrayList<BcryptService.Client>();
 
 	public void initializeBackend(String host, int port) throws IllegalArgument, org.apache.thrift.TException {
 		try {
@@ -18,6 +20,21 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 			this.portList.add(port);
 	
 			System.out.println("Worked! Port: " + portList.get(0));
+
+			/*
+			TODO: The plan is to open a connection to the BE nodes and potentially store the generated "client" in a list
+			--> Still not 100% sure if this is the best solution, but it prevents us from having to use multiple hashPassword and checkPassword functions
+
+			TSocket sock = new TSocket(host, port);
+			TTransport transport = new TFramedTransport(sock);
+			TProtocol protocol = new TBinaryProtocol(transport);
+			BcryptService.Client client = new BcryptService.Client(protocol);
+			transport.open();
+
+			clientList.add(client);
+
+			// TODO: If we do go with this approach, we will need to close the transport after a BE node exits or crashes!
+			*/
 		}
 		catch (Exception e) {
 			throw new IllegalArgument(e.getMessage());
