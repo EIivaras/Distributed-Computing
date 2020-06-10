@@ -62,12 +62,17 @@ public class FENode {
 		log.info("Launching FE node on port " + portFE);
 
 		// launch Thrift server
+		// Create a processor to handler RPC calls
 		BcryptService.Processor processor = new BcryptService.Processor<BcryptService.Iface>(new BcryptServiceHandler());
+		// Create a socket
 		TServerSocket socket = new TServerSocket(portFE);
+		// Attach socket to server so that server accepts requests incoming on this socket
 		TSimpleServer.Args sargs = new TSimpleServer.Args(socket);
+		// Set server arguments
 		sargs.protocolFactory(new TBinaryProtocol.Factory());
 		sargs.transportFactory(new TFramedTransport.Factory());
 		sargs.processorFactory(new TProcessorFactory(processor));
+		// Run the server, it can now accept RPC calls
 		TSimpleServer server = new TSimpleServer(sargs);
 		server.serve();
     }

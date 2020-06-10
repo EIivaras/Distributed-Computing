@@ -3,6 +3,10 @@ import java.util.List;
 
 import org.mindrot.jbcrypt.BCrypt;
 
+/*
+	In these methods, we should use similar methods as the client calling the FENode in Client.java for the FENode to call the backend nodes
+*/
+
 public class BcryptServiceHandler implements BcryptService.Iface {
     public List<String> hashPassword(List<String> password, short logRounds) throws IllegalArgument, org.apache.thrift.TException
     {

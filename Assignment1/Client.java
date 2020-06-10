@@ -19,10 +19,14 @@ public class Client {
 	}
 
 	try {
-	    TSocket sock = new TSocket(args[0], Integer.parseInt(args[1]));
+		// Create a socket
+		TSocket sock = new TSocket(args[0], Integer.parseInt(args[1]));
+		// Create the transport object and protocol
 	    TTransport transport = new TFramedTransport(sock);
-	    TProtocol protocol = new TBinaryProtocol(transport);
-	    BcryptService.Client client = new BcryptService.Client(protocol);
+		TProtocol protocol = new TBinaryProtocol(transport);
+		// Implement client stub, used to invoke RPC
+		BcryptService.Client client = new BcryptService.Client(protocol);
+		// Open the connection to the server on the socket defined above
 	    transport.open();
 
 	    List<String> password = new ArrayList<>();
