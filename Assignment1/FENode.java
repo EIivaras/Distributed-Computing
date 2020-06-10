@@ -75,5 +75,7 @@ public class FENode {
 		// Run the server, it can now accept RPC calls
 		TSimpleServer server = new TSimpleServer(sargs);
 		server.serve();
+
+		// TODO: Open a socket to get data from the backend node(s) (?)
     }
 }
