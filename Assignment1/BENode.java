@@ -18,52 +18,53 @@ public class BENode {
     static Logger log;
 
     public static void main(String [] args) throws Exception {
-	if (args.length != 3) {
-	    System.err.println("Usage: java BENode FE_host FE_port BE_port");
-	    System.exit(-1);
-	}
-
-	// initialize log4j
-	BasicConfigurator.configure();
-	log = Logger.getLogger(BENode.class.getName());
-
-	String hostFE = args[0];
-	int portFE = Integer.parseInt(args[1]);
-	int portBE = Integer.parseInt(args[2]);
-	log.info("Launching BE node on port " + portBE + " at host " + getHostName());
-
-	// Setup so that we can talk to front end
-	TSocket sock = new TSocket(hostFE, portFE);
-	TTransport transport = new TFramedTransport(sock);
-	TProtocol protocol = new TBinaryProtocol(transport);
-	BcryptService.Client client = new BcryptService.Client(protocol);
-
-	while (true){
-		try {
-			transport.open();
-			break;
-		} catch (Exception e) {
-			// If FE is offline, keep looping until it comes online.
+		if (args.length != 3) {
+			System.err.println("Usage: java BENode FE_host FE_port BE_port");
+			System.exit(-1);
 		}
-	}
 
-	// Talk to front end
+		// initialize log4j
+		BasicConfigurator.configure();
+		log = Logger.getLogger(BENode.class.getName());
 
-	client.initializeBackend(hostFE, portBE);
-	transport.close();
+		String hostFE = args[0];
+		int portFE = Integer.parseInt(args[1]);
+		int portBE = Integer.parseInt(args[2]);
+		log.info("Launching BE node on port " + portBE + " at host " + getHostName());
 
-	// launch Thrift server
-	BcryptService.Processor processor = new BcryptService.Processor<BcryptService.Iface>(new BcryptServiceHandler());
-	TServerSocket socket = new TServerSocket(portBE);
-	TSimpleServer.Args sargs = new TSimpleServer.Args(socket);
-	sargs.protocolFactory(new TBinaryProtocol.Factory());
-	sargs.transportFactory(new TFramedTransport.Factory());
-	sargs.processorFactory(new TProcessorFactory(processor));
-	//sargs.maxWorkerThreads(64);
-	TSimpleServer server = new TSimpleServer(sargs);
-	server.serve();
+		// Setup so that we can talk to front end
+		TSocket sock = new TSocket(hostFE, portFE);
+		TTransport transport = new TFramedTransport(sock);
+		TProtocol protocol = new TBinaryProtocol(transport);
+		BcryptService.Client client = new BcryptService.Client(protocol);
 
-	// TODO: Contact FE Node on it's socket and tell it that we are here and ready to act
+		while (true){
+			try {
+				transport.open();
+				break;
+			} catch (Exception e) {
+				// If FE is offline, keep looping until it comes online.
+			}
+		}
+
+		// Talk to front end
+
+		client.initializeBackend(hostFE, portBE);
+		transport.close();
+
+		// launch Thrift server
+		BcryptService.Processor processor = new BcryptService.Processor<BcryptService.Iface>(new BcryptServiceHandler());
+		TServerSocket socket = new TServerSocket(portBE);
+		TSimpleServer.Args sargs = new TSimpleServer.Args(socket);
+		sargs.protocolFactory(new TBinaryProtocol.Factory());
+		sargs.transportFactory(new TFramedTransport.Factory());
+		sargs.processorFactory(new TProcessorFactory(processor));
+
+		// TODO: Figure out how threading is going to work
+		
+		//sargs.maxWorkerThreads(64);
+		TSimpleServer server = new TSimpleServer(sargs);
+		server.serve();
     }
 
     static String getHostName()
