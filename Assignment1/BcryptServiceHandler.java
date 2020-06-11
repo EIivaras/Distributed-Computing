@@ -16,29 +16,29 @@ import org.apache.thrift.transport.TSocket;
 public class BcryptServiceHandler implements BcryptService.Iface {
 
 	private class BackendNode {
-		public Boolean clientActive;
+		public Boolean bcryptClientActive;
 		public Boolean isWorking;
 		public String host;
 		public int port;
-		public BcryptService.Client client;
+		public BcryptService.Client bcryptClient;
 		public TTransport transport;
 
 		public void setHostAndPort(String host, int port) {
 			this.host = host;
 			this.port = port;
-			this.clientActive = false;
+			this.bcryptClientActive = false;
 			this.isWorking = false;
 		}
 
-		public void setClientAndTransport(BcryptService.Client client, TTransport transport) {
+		public void setClientAndTransport(BcryptService.Client bcryptClient, TTransport transport) {
 			try {
-				this.client = client;
+				this.bcryptClient = bcryptClient;
 				this.transport = transport;
 				this.transport.open();
-				this.clientActive = true;
+				this.bcryptClientActive = true;
 			} catch (Exception e) {
 				System.out.println("Failed to open transport for BackendNode.");
-				this.clientActive = false;
+				this.bcryptClientActive = false;
 			}
 		}
 
@@ -46,7 +46,7 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 			try {
 				System.out.println("Starting hashPassword at backend.");
 				this.isWorking = true;
-				List<String> results = this.client.hashPasswordBE(password, logRounds);
+				List<String> results = this.bcryptClient.hashPasswordBE(password, logRounds);
 				this.isWorking = false;
 				System.out.println("Completed hashPassword at backend.");
 				return results;
@@ -62,7 +62,7 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 			try {
 				System.out.println("Starting checkPassword at backend.");
 				this.isWorking = true;
-				List<Boolean> results = this.client.checkPasswordBE(password, hash);
+				List<Boolean> results = this.bcryptClient.checkPasswordBE(password, hash);
 				this.isWorking = false;
 				System.out.println("Completed checkPassword at backend.");
 				return results;
@@ -80,18 +80,18 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 	
 	private List<BackendNode> backendNodes = new ArrayList<BackendNode>();
 
-	private BackendNode createClient(BackendNode backendNode) {
+	private BackendNode createBcryptClient(BackendNode backendNode) {
 
-		// Make sure we're only initializing everything if the client has not already been set up
-		if (backendNode.clientActive) {
+		// Make sure we're only initializing everything if the bcryptClient has not already been set up
+		if (backendNode.bcryptClientActive) {
 			return backendNode;
 		}
 
 		TSocket sock = new TSocket(backendNode.host, backendNode.port);
 		TTransport transport = new TFramedTransport(sock);
 		TProtocol protocol = new TBinaryProtocol(transport);
-		BcryptService.Client client = new BcryptService.Client(protocol);			
-		backendNode.setClientAndTransport(client, transport);
+		BcryptService.Client bcryptClient = new BcryptService.Client(protocol);			
+		backendNode.setClientAndTransport(bcryptClient, transport);
 
 		return backendNode;
 	}
@@ -118,11 +118,12 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 				*/
 				BackendNode backendNode = null;
 
-				// Find a backend node that is not working, and if it's not working, call createClient
-				// CreateClient will create the client of the node so it can handle requests if it is not created already
+				// Find a backend node that is not working, and if it's not working, call createBcryptClient
+				// CreateClient will create the bcryptClient of the node so it can handle requests if it is not created already
 				for (int i = 0; i < backendNodes.size(); i++) {
 					if (!backendNodes.get(i).isWorking) {
-						backendNode = createClient(backendNodes.get(i));
+						backendNode = createBcryptClient(backendNodes.get(i));
+						break;
 					}
 				}
 
@@ -165,11 +166,12 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 			try {
 				BackendNode backendNode = null;
 
-				// Find a backend node that is not working, and if it's not working, call createClient
-				// CreateClient will create the client of the node so it can handle requests if it is not created already
+				// Find a backend node that is not working, and if it's not working, call createBcryptClient
+				// CreateClient will create the bcryptClient of the node so it can handle requests if it is not created already
 				for (int i = 0; i < backendNodes.size(); i++) {
 					if (!backendNodes.get(i).isWorking) {
-						backendNode = createClient(backendNodes.get(i));
+						backendNode = createBcryptClient(backendNodes.get(i));
+						break;
 					}
 				}
 
