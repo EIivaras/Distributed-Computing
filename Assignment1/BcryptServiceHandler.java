@@ -117,24 +117,48 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 					--> Need to make sure that we account for the # of hashes that need to be computed as well.
 				*/
 				BackendNode backendNode = null;
+				List<Integer> freeBEIndices = new ArrayList<>();
+				List<String> result = new ArrayList<>();
 
-				// Find a backend node that is not working, and if it's not working, call createBcryptClient
-				// CreateClient will create the bcryptClient of the node so it can handle requests if it is not created already
+				// Find indices of free (idle) backend nodes
 				for (int i = 0; i < backendNodes.size(); i++) {
 					if (!backendNodes.get(i).isWorking) {
-						backendNode = createBcryptClient(backendNodes.get(i));
-						break;
+						freeBEIndices.add(i);
 					}
 				}
-
-				// If we found a backend node that is ready to work, put it to work!
-				if (backendNode != null) {
-					List<String> result = backendNode.hashPassword(password, logRounds);
+				
+				// if found one or more free backend nodes, split work evenly between them
+				if (freeBEIndices.size() > 0) {
+					// # of items to be processed by current node 
+					int jobSize = password.size() / freeBEIndices.size();
+					// # of items (passwords/hashes) being processed + # of items finished processing (ASSUMES ASYNC RPC) 
+					int itemsProcessed = 0;
 					
+					int nodeNum = 1;
+					for (int i : freeBEIndices){
+						if (nodeNum == freeBEIndices.size()){
+							// handle all remaining items in last job (executed by last freeBE available)
+							jobSize = password.size() - itemsProcessed;
+						}
+
+						// createBcryptClient() will create the bcryptClient of the node so it can handle requests if it is not created already
+						backendNode = createBcryptClient(backendNodes.get(i));
+
+						// TODO: convert below to Async RPC, and only add to result upon recieving response from callback
+						result.addAll(backendNode.hashPassword(password, logRounds));
+						
+						itemsProcessed += jobSize;
+						nodeNum++;
+					}	
+
 					return result;
 				}
-
 			} catch (Exception e) {
+				/* TODO: must be able to handle BE failures independently, callback onError() function should take care of this
+					--> If 3 BE nodes are running and one crashes, the 2 other BE nodes must continue adding to result,
+						 but does the FENode process the rest of the batch?
+					     	Maybe the "result" array should be outside of this try-catch block
+ 				*/
 				System.out.println(e.getMessage());
 			}
 
