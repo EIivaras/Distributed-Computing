@@ -17,6 +17,7 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 
 	private class BackendNode {
 		public Boolean clientActive;
+		public Boolean isWorking;
 		public String host;
 		public int port;
 		public BcryptService.Client client;
@@ -26,6 +27,7 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 			this.host = host;
 			this.port = port;
 			this.clientActive = false;
+			this.isWorking = false;
 		}
 
 		public void setClientAndTransport(BcryptService.Client client, TTransport transport) {
@@ -40,6 +42,37 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 			}
 		}
 
+		public List<String> hashPassword(List<String> password, short logRounds) throws IllegalArgument, org.apache.thrift.TException {
+			try {
+				System.out.println("Starting hashPassword at backend.");
+				this.isWorking = true;
+				List<String> results = this.client.hashPasswordBE(password, logRounds);
+				this.isWorking = false;
+				System.out.println("Completed hashPassword at backend.");
+				return results;
+			} catch (Exception e) {
+				// TODO: hashPasswordBE throws an IllegalArgument like this, so can I do the same here?
+				System.out.println("Failed to hash password at backend.");
+				this.isWorking = false;
+				throw new IllegalArgument(e.getMessage());
+			}
+		}
+
+		public List<Boolean> checkPassword(List<String> password, List<String> hash) throws IllegalArgument, org.apache.thrift.TException {
+			try {
+				System.out.println("Starting checkPassword at backend.");
+				this.isWorking = true;
+				List<Boolean> results = this.client.checkPasswordBE(password, hash);
+				this.isWorking = false;
+				System.out.println("Completed checkPassword at backend.");
+				return results;
+			} catch (Exception e) {
+				System.out.println("Failed to check password at backend.");
+				this.isWorking = false;
+				throw new IllegalArgument(e.getMessage());
+			}
+		}
+
 		public void closeTransport() {
 			this.transport.close();
 		}
@@ -50,10 +83,8 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 	private BackendNode createClient(BackendNode backendNode) {
 
 		// Make sure we're only initializing everything if the client has not already been set up
-		for (int i = 0; i < backendNodes.size(); i++) {
-			if (backendNode.clientActive) {
-				return backendNode;
-			}
+		if (backendNode.clientActive) {
+			return backendNode;
 		}
 
 		TSocket sock = new TSocket(backendNode.host, backendNode.port);
@@ -85,19 +116,28 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 				/* TODO: Create a load balancer to choose which backend nodes get chosen for a certain task
 					--> Need to make sure that we account for the # of hashes that need to be computed as well.
 				*/
+				BackendNode backendNode = null;
 
-				BackendNode backendNode = createClient(backendNodes.get(0));
+				// Find a backend node that is not working, and if it's not working, call createClient
+				// CreateClient will create the client of the node so it can handle requests if it is not created already
+				for (int i = 0; i < backendNodes.size(); i++) {
+					if (!backendNodes.get(i).isWorking) {
+						backendNode = createClient(backendNodes.get(i));
+					}
+				}
 
-				System.out.println("Starting hashPassword at backend.");
-				List<String> result = backendNode.client.hashPasswordBE(password, logRounds);
-				System.out.println("Completed hashPassword at backend.");
-				
-				return result;
+				// If we found a backend node that is ready to work, put it to work!
+				if (backendNode != null) {
+					List<String> result = backendNode.hashPassword(password, logRounds);
+					
+					return result;
+				}
+
 			} catch (Exception e) {
-				System.out.println("Failed trying to call hashPassword on backend node.");
 				System.out.println(e.getMessage());
 			}
 
+			System.out.println("Starting hashPassword at frontend.");
 
 			List<String> ret = new ArrayList<>();
 
@@ -109,9 +149,12 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 				hashString = BCrypt.hashpw(passwordString, BCrypt.gensalt(logRounds));
 				ret.add(hashString);
 			}
+
+			System.out.println("Completed hashPassword at frontend.");
 			
 			return ret;
 		} catch (Exception e) {
+			System.out.println("Failed to hash password at frontend.");
 			throw new IllegalArgument(e.getMessage());
 		}
     }
@@ -120,18 +163,27 @@ public class BcryptServiceHandler implements BcryptService.Iface {
     {
 		try {
 			try {
-				BackendNode backendNode = createClient(backendNodes.get(0));
+				BackendNode backendNode = null;
 
-				System.out.println("Starting checkPassword at backend.");
-				List<Boolean> result = backendNode.client.checkPasswordBE(password, hash);
-				System.out.println("Completed checkPassword at backend.");
-				
-				return result;
+				// Find a backend node that is not working, and if it's not working, call createClient
+				// CreateClient will create the client of the node so it can handle requests if it is not created already
+				for (int i = 0; i < backendNodes.size(); i++) {
+					if (!backendNodes.get(i).isWorking) {
+						backendNode = createClient(backendNodes.get(i));
+					}
+				}
+
+				// If we found a backend node that is ready to work, put it to work!
+				if (backendNode != null) {
+					List<Boolean> result = backendNode.checkPassword(password, hash);
+					
+					return result;
+				}
 			} catch (Exception e) {
-				System.out.println("Failed trying to call checkPassword on backend node.");
 				System.out.println(e.getMessage());
 			}
 
+			System.out.println("Starting checkPassword at frontend.");
 
 			List<Boolean> ret = new ArrayList<>();
 
@@ -145,8 +197,10 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 				ret.add(BCrypt.checkpw(passwordString, hashString));
 			}
 
+			System.out.println("Completed checkPassword at frontend.");
 			return ret;
 		} catch (Exception e) {
+			System.out.println("Failed to check password at frontend.");
 			throw new IllegalArgument(e.getMessage());
 		}
 	}
