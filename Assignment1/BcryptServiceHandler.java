@@ -3,15 +3,11 @@ import java.util.List;
 
 import org.mindrot.jbcrypt.BCrypt;
 
-import org.apache.thrift.TProcessorFactory;
 import org.apache.thrift.protocol.TBinaryProtocol;
-import org.apache.thrift.server.TSimpleServer;
-import org.apache.thrift.transport.TServerSocket;
 import org.apache.thrift.transport.TFramedTransport;
 import org.apache.thrift.protocol.TProtocol;
 import org.apache.thrift.transport.TTransport;
 import org.apache.thrift.transport.TSocket;
-import org.apache.thrift.transport.TTransportFactory;
 
 /*
 	In these methods, we should use similar methods as the client calling the FENode in Client.java for the FENode to call the backend nodes
@@ -19,18 +15,62 @@ import org.apache.thrift.transport.TTransportFactory;
 
 public class BcryptServiceHandler implements BcryptService.Iface {
 
-	private List<String> hostList = new ArrayList<String>();
-	private List<Integer> portList = new ArrayList<Integer>();
-	// TODO: Verify that we can even declare a list of this, or if thrift complains?
-	private List<BcryptService.Client> clientList = new ArrayList<BcryptService.Client>();
+	private class BackendNode {
+		public Boolean clientActive;
+		public String host;
+		public int port;
+		public BcryptService.Client client;
+		public TTransport transport;
+
+		public void setHostAndPort(String host, int port) {
+			this.host = host;
+			this.port = port;
+			this.clientActive = false;
+		}
+
+		public void setClientAndTransport(BcryptService.Client client, TTransport transport) {
+			try {
+				this.client = client;
+				this.transport = transport;
+				this.transport.open();
+				this.clientActive = true;
+			} catch (Exception e) {
+				System.out.println("Failed to open transport for BackendNode.");
+				this.clientActive = false;
+			}
+		}
+
+		public void closeTransport() {
+			this.transport.close();
+		}
+	}
+	
+	private List<BackendNode> backendNodes = new ArrayList<BackendNode>();
+
+	private BackendNode createClient(BackendNode backendNode) {
+
+		// Make sure we're only initializing everything if the client has not already been set up
+		for (int i = 0; i < backendNodes.size(); i++) {
+			if (backendNode.clientActive) {
+				return backendNode;
+			}
+		}
+
+		TSocket sock = new TSocket(backendNode.host, backendNode.port);
+		TTransport transport = new TFramedTransport(sock);
+		TProtocol protocol = new TBinaryProtocol(transport);
+		BcryptService.Client client = new BcryptService.Client(protocol);			
+		backendNode.setClientAndTransport(client, transport);
+
+		return backendNode;
+	}
 
 	public void initializeBackend(String host, int port) throws IllegalArgument, org.apache.thrift.TException {
 		try {
-			this.hostList.add(host);
-			this.portList.add(port);
-	
-			System.out.println("Worked! Port: " + portList.get(0));
+			BackendNode backendNode = new BackendNode();
+			backendNode.setHostAndPort(host, port);
 			
+			backendNodes.add(backendNode);
 		}
 		catch (Exception e) {
 			throw new IllegalArgument(e.getMessage());
@@ -42,30 +82,20 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 		try {
 			try {
 
-				/* TODO: Don't build up the connection from scratch and then close it for every single request
-					--> Instead, store the connection in a connection list and look through the list for active connections when we need to do a computation.
-					--> If the method fails to be called on the backend node in question, remove it from the list and close the connection as the BE node has probably disconnected.
-				*/
-
 				/* TODO: Create a load balancer to choose which backend nodes get chosen for a certain task
 					--> Need to make sure that we account for the # of hashes that need to be computed as well.
 				*/
 
-				TSocket sock = new TSocket(hostList.get(0), portList.get(0));
-				TTransport transport = new TFramedTransport(sock);
-				TProtocol protocol = new TBinaryProtocol(transport);
-				BcryptService.Client client = new BcryptService.Client(protocol);
-				System.out.println("Opening connection from FE to BE.");
-				transport.open();
-				System.out.println("Starting hash at backend.");
-				List<String> result = client.hashPasswordBE(password, logRounds);
-				System.out.println("Completed hash at backend.");
+				BackendNode backendNode = createClient(backendNodes.get(0));
 
-				transport.close();
+				System.out.println("Starting hashPassword at backend.");
+				List<String> result = backendNode.client.hashPasswordBE(password, logRounds);
+				System.out.println("Completed hashPassword at backend.");
 				
 				return result;
 			} catch (Exception e) {
 				System.out.println("Failed trying to call hashPassword on backend node.");
+				System.out.println(e.getMessage());
 			}
 
 
@@ -89,8 +119,19 @@ public class BcryptServiceHandler implements BcryptService.Iface {
     public List<Boolean> checkPassword(List<String> password, List<String> hash) throws IllegalArgument, org.apache.thrift.TException
     {
 		try {
+			try {
+				BackendNode backendNode = createClient(backendNodes.get(0));
 
-			/* TODO: Add code similar to the hashPassword function that makes the code run on the backend */
+				System.out.println("Starting checkPassword at backend.");
+				List<Boolean> result = backendNode.client.checkPasswordBE(password, hash);
+				System.out.println("Completed checkPassword at backend.");
+				
+				return result;
+			} catch (Exception e) {
+				System.out.println("Failed trying to call checkPassword on backend node.");
+				System.out.println(e.getMessage());
+			}
+
 
 			List<Boolean> ret = new ArrayList<>();
 
