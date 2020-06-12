@@ -216,6 +216,7 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 
 					// # of items to be processed by current node 
 					int jobSize = password.size() / freeBEIndices.size();
+          
 					if (jobSize < 1) {
 						// assign entire job (whole password list) to only one free BE node: latch initialized to 1 for "1 async RPC"
 						// TODO: could change behavior below to assign job to less BE nodes, instead of only one
