@@ -134,22 +134,28 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 					// # of items (passwords/hashes) being processed + # of items finished processing (ASSUMES ASYNC RPC) 
 					int itemsProcessed = 0;
 					
-					int nodeNum = 1;
-					for (int i : freeBEIndices){
-						if (nodeNum == freeBEIndices.size()){
-							// handle all remaining items in last job (executed by last freeBE available)
-							jobSize = password.size() - itemsProcessed;
-						}
-
-						// createBcryptClient() will create the bcryptClient of the node so it can handle requests if it is not created already
-						backendNode = createBcryptClient(backendNodes.get(i));
-
-						// TODO: convert below to Async RPC, and only add to result upon recieving response from callback
+					if (jobSize < 1) {
+						// jobSize too small, assign all work to one BE node only
+						backendNode = createBcryptClient(backendNodes.get(freeBEIndices.get(0)));
 						result.addAll(backendNode.hashPassword(password, logRounds));
-						
-						itemsProcessed += jobSize;
-						nodeNum++;
-					}	
+					} else {
+						int nodeNum = 1;
+						for (int i : freeBEIndices){
+							if (nodeNum == freeBEIndices.size()){
+								// handle all remaining items in last job (executed by last freeBE available)
+								jobSize = password.size() - itemsProcessed;
+							}
+
+							// createBcryptClient() will create the bcryptClient of the node so it can handle requests if it is not created already
+							backendNode = createBcryptClient(backendNodes.get(i));
+
+							// TODO: convert below to Async RPC, and only add to result upon recieving response from callback
+							result.addAll(itemsProcessed, backendNode.hashPassword(password.subList(itemsProcessed, (itemsProcessed + jobSize)), logRounds));
+							
+							itemsProcessed += jobSize;
+							nodeNum++;
+						}	
+					}
 
 					return result;
 				}
