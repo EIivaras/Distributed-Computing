@@ -26,9 +26,12 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 
 	private class hashPassCallback implements AsyncMethodCallback<List<String>> {
 		public void onComplete(List<String> response) {
-			// TODO: insert the resulting sublist into the correct position in the final results list
-			hashPassResult.addAll(index, hashPassResult);
+			// TODO: instead of shared (global) result, we pass a thread-safe list by reference to every BE node's hashPass function
+			//		 and they add their results into that list at the correct index...
+			//       if this change is made (and successful), then hashPassBE and checkPassBE will return void
 
+			//hashPassResult.addAll(index, response);
+			
 			latch.countDown();
 		}
 		public void onError(Exception e) {
@@ -164,7 +167,7 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 						latch = new CountDownLatch(1);
 
 						backendNode = createBcryptClient(backendNodes.get(freeBEIndices.get(0)));
-						result.addAll(backendNode.hashPassword(password, logRounds));
+						backendNode.hashPassword(password, logRounds);
 					} else {
 						// split jobs (password list chunks) evenly between all free BE nodes (jobSize >= 1)
 						// set latch (# of async RPCs) to # of free BE nodes 
@@ -184,7 +187,7 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 
 							// TODO: convert below to Async RPC, and only add to result upon recieving response from callback
 							// note: password.subList(start, end) deals with the range [start,end) i.e. end exclusive
-							result.addAll(backendNode.hashPassword(password.subList(itemsProcessed, (itemsProcessed + jobSize)), logRounds));
+							backendNode.hashPassword(password.subList(itemsProcessed, (itemsProcessed + jobSize)), logRounds);
 
 							itemsProcessed += jobSize;
 							nodeNum++;
