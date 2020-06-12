@@ -6,67 +6,69 @@ import org.mindrot.jbcrypt.BCrypt;
 import org.apache.thrift.async.AsyncMethodCallback;
 import org.apache.thrift.async.TAsyncClientManager;
 import org.apache.thrift.protocol.TBinaryProtocol;
-import org.apache.thrift.transport.TFramedTransport;
 import org.apache.thrift.transport.TNonblockingSocket;
 import org.apache.thrift.transport.TNonblockingTransport;
-import org.apache.thrift.protocol.TProtocol;
 import org.apache.thrift.protocol.TProtocolFactory;
 import org.apache.thrift.transport.TTransport;
-import org.apache.thrift.transport.TSocket;
 
 /*
 	In these methods, we should use similar methods as the client calling the FENode in Client.java for the FENode to call the backend nodes
 */
 
 public class BcryptServiceHandler implements BcryptService.Iface {
-	// TODO: Ensure this latch won't be overwritten if we're handling a bunch of requests at once?
-	private static CountDownLatch latch = null; /* for synchronization between FENode and async requests on BE node  */
 	private List<BackendNode> backendNodes = new ArrayList<BackendNode>(); /* backend nodes that are up & running */
 
 	private class HashPassCallback implements AsyncMethodCallback<List<String>> {
 
+		public CountDownLatch countDownLatch = null;
 		public List<String> resultList;
 		public boolean hadError = false;
+		public boolean isWorking = false;
 
 		public void onComplete(List<String> response) {
-			System.out.println("Got to onComplete of HashPassCallback");
+			System.out.println("Completed hashPassword at backend.");
 			this.resultList = response;
 			this.hadError = false;
+			this.isWorking = false;
 			
-			latch.countDown();
+			countDownLatch.countDown();
 		}
 		public void onError(Exception e) {
 			System.out.println("Callback onError method called for HashPassCallback. Exception:");
 			System.out.println(e.getMessage());
 			this.hadError = true;
-			latch.countDown();
+			this.isWorking = false;
+			countDownLatch.countDown();
 		}
 	}
 
 	private class CheckPassCallback implements AsyncMethodCallback<List<Boolean>> {
 
+		public CountDownLatch countDownLatch = null;
 		public List<Boolean> resultList;
 		public boolean hadError = false;
+		public boolean isWorking = false;
 
 		public void onComplete (List<Boolean> response) {
-			System.out.println("Got to onComplete of CheckPassCallback");
+			System.out.println("Completed checkPassword at backend.");
 			resultList = response;
 			this.hadError = false;
+			this.isWorking = false;
 
-			latch.countDown();
+			countDownLatch.countDown();
 		}
 
 		public void onError(Exception e) {
 			System.out.println("Callback onError method called for CheckPassCallback. Exception:");
 			System.out.println(e.getMessage());
 			this.hadError = true;
-			latch.countDown();
+			this.isWorking = false;
+			countDownLatch.countDown();
 		}
 	}
 
 	private class BackendNode {
 		public Boolean bcryptClientActive;
-		public Boolean isWorking;
 		public String host;
 		public int port;
 		public BcryptService.AsyncClient bcryptClient;
@@ -78,7 +80,8 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 			this.host = host;
 			this.port = port;
 			this.bcryptClientActive = false;
-			this.isWorking = false;
+			this.hashPassCallback = new HashPassCallback();
+			this.checkPassCallback = new CheckPassCallback();
 		}
 
 		public void setClientAndTransport(BcryptService.AsyncClient bcryptClient, TTransport transport) {
@@ -88,8 +91,6 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 				// TODO: Ensure we don't need to open for async connections
 				// this.transport.open(); 
 				this.bcryptClientActive = true;
-				this.hashPassCallback = new HashPassCallback();
-				this.checkPassCallback = new CheckPassCallback();
 			} catch (Exception e) {
 				System.out.println("Failed to open transport for BackendNode.");
 				this.bcryptClientActive = false;
@@ -99,14 +100,13 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 		public void hashPassword(List<String> password, short logRounds) throws IllegalArgument, org.apache.thrift.TException {
 			try {
 				System.out.println("Starting hashPassword at backend.");
-				this.isWorking = true;
+				this.hashPassCallback.isWorking = true;
 				this.bcryptClient.hashPasswordBE(password, logRounds, this.hashPassCallback);
-				this.isWorking = false;
-				System.out.println("Completed hashPassword at backend.");
 			} catch (Exception e) {
 				// TODO: hashPasswordBE throws an IllegalArgument like this, so can I do the same here?
+				this.bcryptClientActive = false;
 				System.out.println("Failed hashPassword at backend.");
-				this.isWorking = false;
+				this.hashPassCallback.isWorking = false;
 				throw new IllegalArgument(e.getMessage());
 			}
 		}
@@ -114,13 +114,12 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 		public void checkPassword(List<String> password, List<String> hash) throws IllegalArgument, org.apache.thrift.TException {
 			try {
 				System.out.println("Starting checkPassword at backend.");
-				this.isWorking = true;
+				this.checkPassCallback.isWorking = true;
 				this.bcryptClient.checkPasswordBE(password, hash, this.checkPassCallback);
-				this.isWorking = false;
-				System.out.println("Completed checkPassword at backend.");
 			} catch (Exception e) {
+				this.bcryptClientActive = false;
 				System.out.println("Failed checkPassword at backend.");
-				this.isWorking = false;
+				this.checkPassCallback.isWorking = false;
 				throw new IllegalArgument(e.getMessage());
 			}
 		}
@@ -144,6 +143,18 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 		public Boolean checkCheckPassErrors() {
 			return this.checkPassCallback.hadError;
 		}
+
+		public void setHashPassLatch(CountDownLatch countDownLatch) {
+			this.hashPassCallback.countDownLatch = countDownLatch;
+		}
+
+		public void setCheckPassLatch(CountDownLatch countDownLatch) {
+			this.checkPassCallback.countDownLatch = countDownLatch;
+		}
+
+		public boolean isWorking() {
+			return (this.hashPassCallback.isWorking || this.checkPassCallback.isWorking);
+		}
 	}
 	
 	private BackendNode createBcryptClient(BackendNode backendNode) {
@@ -161,7 +172,7 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 
 			backendNode.setClientAndTransport(bcryptClient, transport);	
 		} catch (Exception e) {
-			//TODO: handle exception
+			//TODO: Handle a potential "connection refused", as we don't want to keep trying to setup a connection with a closed backend node
 			System.out.println("Failed to setup async bcryptClient.");
 		}
 
@@ -173,6 +184,7 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 			BackendNode backendNode = new BackendNode();
 			backendNode.setHostAndPort(host, port);
 			
+			System.out.println("Backend node initialized.");
 			backendNodes.add(backendNode);
 		}
 		catch (Exception e) {
@@ -184,6 +196,8 @@ public class BcryptServiceHandler implements BcryptService.Iface {
     {
 		try {
 			try {
+				System.out.println("Called");
+
 				BackendNode backendNode = null;
 				List<Integer> freeBEIndices = new ArrayList<>();
 				List<BackendNode> usedBENodes = new ArrayList<>();
@@ -191,27 +205,30 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 
 				// Find indices of free (idle) backend nodes
 				for (int i = 0; i < backendNodes.size(); i++) {
-					if (!backendNodes.get(i).isWorking) {
+					if (!backendNodes.get(i).isWorking()) {
 						freeBEIndices.add(i);
 					}
 				}
 				
 				// if found one or more free backend nodes, split work evenly between them
 				if (freeBEIndices.size() > 0) {
+					CountDownLatch countDownLatch = null;
+
 					// # of items to be processed by current node 
 					int jobSize = password.size() / freeBEIndices.size();
 					if (jobSize < 1) {
 						// assign entire job (whole password list) to only one free BE node: latch initialized to 1 for "1 async RPC"
 						// TODO: could change behavior below to assign job to less BE nodes, instead of only one
-						latch = new CountDownLatch(1);
-
+						
 						usedBENodes.add(backendNodes.get(freeBEIndices.get(0)));
 						backendNode = createBcryptClient(backendNodes.get(freeBEIndices.get(0)));
+						countDownLatch = new CountDownLatch(1);
+						backendNodes.get(freeBEIndices.get(0)).setHashPassLatch(countDownLatch);
 						backendNode.hashPassword(password, logRounds);
 					} else {
 						// split jobs (password list chunks) evenly between all free BE nodes (jobSize >= 1)
 						// set latch (# of async RPCs) to # of free BE nodes 
-						latch = new CountDownLatch(freeBEIndices.size());
+						countDownLatch = new CountDownLatch(freeBEIndices.size());
 						// # of items (passwords/hashes) being processed + # of items finished processing (ASSUMES ASYNC RPC) 
 						int itemsProcessed = 0;
 						
@@ -225,30 +242,32 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 							usedBENodes.add(backendNodes.get(i));
 							// createBcryptClient() will create the bcryptClient of the node so it can handle requests if it is not created already
 							backendNode = createBcryptClient(backendNodes.get(i));
+							backendNodes.get(i).setHashPassLatch(countDownLatch);
 							backendNode.hashPassword(password.subList(itemsProcessed, (itemsProcessed + jobSize)), logRounds);
 
 							itemsProcessed += jobSize;
 							nodeNum++;
 						}
-
-						latch.await();
-
-						// TODO: If there was a callback error (can check via node.checkHashPassErrors()),
-						// We need to change how insertions into this list work
-						// --> Might need to do this process in a loop until we get all results correctly
-						for (BackendNode node : usedBENodes) {
-							result.addAll(node.getHashPassResults());
-						}
-
-						return result;
 					} 
+
+					countDownLatch.await();
+
+					// TODO: If there was a callback error (can check via node.checkHashPassErrors()),
+					// We need to change how insertions into this list work
+					// --> Might need to do this process in a loop until we get all results correctly
+					for (BackendNode node : usedBENodes) {
+						result.addAll(node.getHashPassResults());
+					}
+
+					return result;
 				}
 			} catch (Exception e) {
 				/* TODO: must be able to handle BE failures independently, callback onError() function should take care of this
 					--> If 3 BE nodes are running and one crashes, the 2 other BE nodes must continue adding to result,
 						 but does the FENode process the rest of the batch?
 					     	Maybe the "result" array should be outside of this try-catch block
- 				*/
+				 */
+				System.out.println("Error in frontend hashPassword method:");
 				System.out.println(e.getMessage());
 			}
 
@@ -284,22 +303,23 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 				List<Boolean> result = new ArrayList<>();
 
 				for (int i = 0; i < backendNodes.size(); i++) {
-					if (!backendNodes.get(i).isWorking) {
+					if (!backendNodes.get(i).isWorking()) {
 						freeBEIndices.add(i);
 					}
 				}
 				
 				if (freeBEIndices.size() > 0) {
+					CountDownLatch countDownLatch = null;
+
 					int jobSize = password.size() / freeBEIndices.size();
 					if (jobSize < 1) {
-
-						latch = new CountDownLatch(1);
-
 						usedBENodes.add(backendNodes.get(freeBEIndices.get(0)));
 						backendNode = createBcryptClient(backendNodes.get(freeBEIndices.get(0)));
+						countDownLatch = new CountDownLatch(1);
+						backendNodes.get(freeBEIndices.get(0)).setCheckPassLatch(countDownLatch);
 						backendNode.checkPassword(password, hash);
 					} else {
-						latch = new CountDownLatch(freeBEIndices.size());
+						countDownLatch = new CountDownLatch(freeBEIndices.size());
 						int itemsProcessed = 0;
 						
 						int nodeNum = 1;
@@ -310,6 +330,7 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 
 							usedBENodes.add(backendNodes.get(i));
 							backendNode = createBcryptClient(backendNodes.get(i));
+							backendNodes.get(i).setCheckPassLatch(countDownLatch);
 							backendNode.checkPassword(password.subList(itemsProcessed, (itemsProcessed + jobSize)), hash.subList(itemsProcessed, (itemsProcessed + jobSize)));
 
 							itemsProcessed += jobSize;
@@ -317,7 +338,7 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 						}
 					} 
 
-					latch.await();
+					countDownLatch.await();
 
 					// TODO: If there was a callback error (can check via node.checkCheckPassErrors()),
 					// We need to change how insertions into this list work
@@ -333,7 +354,8 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 					--> If 3 BE nodes are running and one crashes, the 2 other BE nodes must continue adding to result,
 						 but does the FENode process the rest of the batch?
 					     	Maybe the "result" array should be outside of this try-catch block
- 				*/
+				 */
+				System.out.println("Error in frontend checkPassword method:");
 				System.out.println(e.getMessage());
 			}
 
