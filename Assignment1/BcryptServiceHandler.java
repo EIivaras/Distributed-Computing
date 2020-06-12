@@ -29,13 +29,14 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 		public boolean hadError = false;
 
 		public void onComplete(List<String> response) {
+			System.out.println("Got to onComplete of HashPassCallback");
 			this.resultList = response;
 			this.hadError = false;
 			
 			latch.countDown();
 		}
 		public void onError(Exception e) {
-			System.out.println("Callback onError method called. Exception:");
+			System.out.println("Callback onError method called for HashPassCallback. Exception:");
 			System.out.println(e.getMessage());
 			this.hadError = true;
 			latch.countDown();
@@ -48,6 +49,7 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 		public boolean hadError = false;
 
 		public void onComplete (List<Boolean> response) {
+			System.out.println("Got to onComplete of CheckPassCallback");
 			resultList = response;
 			this.hadError = false;
 
@@ -55,7 +57,7 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 		}
 
 		public void onError(Exception e) {
-			System.out.println("Callback onError method called. Exception:");
+			System.out.println("Callback onError method called for CheckPassCallback. Exception:");
 			System.out.println(e.getMessage());
 			this.hadError = true;
 			latch.countDown();
@@ -103,7 +105,7 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 				System.out.println("Completed hashPassword at backend.");
 			} catch (Exception e) {
 				// TODO: hashPasswordBE throws an IllegalArgument like this, so can I do the same here?
-				System.out.println("Failed to hash password at backend.");
+				System.out.println("Failed hashPassword at backend.");
 				this.isWorking = false;
 				throw new IllegalArgument(e.getMessage());
 			}
@@ -117,7 +119,7 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 				this.isWorking = false;
 				System.out.println("Completed checkPassword at backend.");
 			} catch (Exception e) {
-				System.out.println("Failed to check password at backend.");
+				System.out.println("Failed checkPassword at backend.");
 				this.isWorking = false;
 				throw new IllegalArgument(e.getMessage());
 			}
@@ -346,6 +348,13 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 				passwordString = password.get(i);
 				hashString = hash.get(i);
 
+				// We don't want to be throwing an exception, only returning false, for an invalid salt version
+				// checkpw will throw an exception is there is an invalid salt version, so we have to bypass that
+				if (hashString.charAt(0) != '$' && hashString.charAt(1) != '2') {
+					ret.add(false);
+					continue;
+				}
+
 				ret.add(BCrypt.checkpw(passwordString, hashString));
 			}
 
@@ -391,7 +400,12 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 				passwordString = password.get(i);
 				hashString = hash.get(i);
 
-				ret.add(BCrypt.checkpw(passwordString, hashString));
+				// We don't want to be throwing an exception, only returning false, for an invalid salt version
+				// checkpw will throw an exception is there is an invalid salt version, so we have to bypass that
+				if (hashString.charAt(0) != '$' && hashString.charAt(1) != '2') {
+					ret.add(false);
+					continue;
+				}
 			}
 
 			return ret;
