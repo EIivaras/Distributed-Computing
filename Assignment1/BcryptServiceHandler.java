@@ -1,11 +1,16 @@
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 
 import org.mindrot.jbcrypt.BCrypt;
-
+import org.apache.thrift.async.AsyncMethodCallback;
+import org.apache.thrift.async.TAsyncClientManager;
 import org.apache.thrift.protocol.TBinaryProtocol;
 import org.apache.thrift.transport.TFramedTransport;
+import org.apache.thrift.transport.TNonblockingSocket;
+import org.apache.thrift.transport.TNonblockingTransport;
 import org.apache.thrift.protocol.TProtocol;
+import org.apache.thrift.protocol.TProtocolFactory;
 import org.apache.thrift.transport.TTransport;
 import org.apache.thrift.transport.TSocket;
 
@@ -14,13 +19,30 @@ import org.apache.thrift.transport.TSocket;
 */
 
 public class BcryptServiceHandler implements BcryptService.Iface {
+	private static CountDownLatch latch = null; /* for synchronization between FENode and async requests on BE node  */
+	private List<BackendNode> backendNodes = new ArrayList<BackendNode>(); /* backend nodes that are up & running */
+	private List<String> hashPassResult = new ArrayList<String>(); /* might have to change the scope of this */
+	private List<String> checkPassResult = new ArrayList<String>(); /* might have to change the scope of this */
+
+	private class hashPassCallback implements AsyncMethodCallback<List<String>> {
+		public void onComplete(List<String> response) {
+			// TODO: insert the resulting sublist into the correct position in the final results list
+			hashPassResult.addAll(index, hashPassResult);
+
+			latch.countDown();
+		}
+		public void onError(Exception e) {
+
+			latch.countDown();
+		}
+	}
 
 	private class BackendNode {
 		public Boolean bcryptClientActive;
 		public Boolean isWorking;
 		public String host;
 		public int port;
-		public BcryptService.Client bcryptClient;
+		public BcryptService.AsyncClient bcryptClient;
 		public TTransport transport;
 
 		public void setHostAndPort(String host, int port) {
@@ -30,7 +52,7 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 			this.isWorking = false;
 		}
 
-		public void setClientAndTransport(BcryptService.Client bcryptClient, TTransport transport) {
+		public void setClientAndTransport(BcryptService.AsyncClient bcryptClient, TTransport transport) {
 			try {
 				this.bcryptClient = bcryptClient;
 				this.transport = transport;
@@ -42,14 +64,15 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 			}
 		}
 
-		public List<String> hashPassword(List<String> password, short logRounds) throws IllegalArgument, org.apache.thrift.TException {
+		public void hashPassword(List<String> password, short logRounds) throws IllegalArgument, org.apache.thrift.TException {
 			try {
 				System.out.println("Starting hashPassword at backend.");
 				this.isWorking = true;
-				List<String> results = this.bcryptClient.hashPasswordBE(password, logRounds);
+				// List<String> results = this.bcryptClient.hashPasswordBE(password, logRounds, new hashPassCallback());
+				this.bcryptClient.hashPasswordBE(password, logRounds, new hashPassCallback());
 				this.isWorking = false;
 				System.out.println("Completed hashPassword at backend.");
-				return results;
+				// return results;
 			} catch (Exception e) {
 				// TODO: hashPasswordBE throws an IllegalArgument like this, so can I do the same here?
 				System.out.println("Failed to hash password at backend.");
@@ -78,20 +101,24 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 		}
 	}
 	
-	private List<BackendNode> backendNodes = new ArrayList<BackendNode>();
-
 	private BackendNode createBcryptClient(BackendNode backendNode) {
 
 		// Make sure we're only initializing everything if the bcryptClient has not already been set up
 		if (backendNode.bcryptClientActive) {
 			return backendNode;
 		}
+		
+		try {
+			TNonblockingTransport transport = new TNonblockingSocket(backendNode.host, backendNode.port);
+			TProtocolFactory pf = new TBinaryProtocol.Factory();
+			TAsyncClientManager cm = new TAsyncClientManager();
+			BcryptService.AsyncClient bcryptClient = new BcryptService.AsyncClient(pf, cm, transport);	
 
-		TSocket sock = new TSocket(backendNode.host, backendNode.port);
-		TTransport transport = new TFramedTransport(sock);
-		TProtocol protocol = new TBinaryProtocol(transport);
-		BcryptService.Client bcryptClient = new BcryptService.Client(protocol);			
-		backendNode.setClientAndTransport(bcryptClient, transport);
+			backendNode.setClientAndTransport(bcryptClient, transport);	
+		} catch (Exception e) {
+			//TODO: handle exception
+			System.out.println("Failed to setup async bcryptClient.");
+		}
 
 		return backendNode;
 	}
@@ -131,25 +158,38 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 				if (freeBEIndices.size() > 0) {
 					// # of items to be processed by current node 
 					int jobSize = password.size() / freeBEIndices.size();
-					// # of items (passwords/hashes) being processed + # of items finished processing (ASSUMES ASYNC RPC) 
-					int itemsProcessed = 0;
-					
-					int nodeNum = 1;
-					for (int i : freeBEIndices){
-						if (nodeNum == freeBEIndices.size()){
-							// handle all remaining items in last job (executed by last freeBE available)
-							jobSize = password.size() - itemsProcessed;
-						}
+					if (jobSize < 1) {
+						// assign entire job (whole password list) to only one free BE node: latch initialized to 1 for "1 async RPC"
+						// TODO: could change behavior below to assign job to less BE nodes, instead of only one
+						latch = new CountDownLatch(1);
 
-						// createBcryptClient() will create the bcryptClient of the node so it can handle requests if it is not created already
-						backendNode = createBcryptClient(backendNodes.get(i));
-
-						// TODO: convert below to Async RPC, and only add to result upon recieving response from callback
+						backendNode = createBcryptClient(backendNodes.get(freeBEIndices.get(0)));
 						result.addAll(backendNode.hashPassword(password, logRounds));
+					} else {
+						// split jobs (password list chunks) evenly between all free BE nodes (jobSize >= 1)
+						// set latch (# of async RPCs) to # of free BE nodes 
+						latch = new CountDownLatch(freeBEIndices.size());
+						// # of items (passwords/hashes) being processed + # of items finished processing (ASSUMES ASYNC RPC) 
+						int itemsProcessed = 0;
 						
-						itemsProcessed += jobSize;
-						nodeNum++;
-					}	
+						int nodeNum = 1;
+						for (int i : freeBEIndices){
+							if (nodeNum == freeBEIndices.size()){
+								// handle all remaining items in last job (executed by last freeBE available)
+								jobSize = password.size() - itemsProcessed;
+							}
+
+							// createBcryptClient() will create the bcryptClient of the node so it can handle requests if it is not created already
+							backendNode = createBcryptClient(backendNodes.get(i));
+
+							// TODO: convert below to Async RPC, and only add to result upon recieving response from callback
+							// note: password.subList(start, end) deals with the range [start,end) i.e. end exclusive
+							result.addAll(backendNode.hashPassword(password.subList(itemsProcessed, (itemsProcessed + jobSize)), logRounds));
+
+							itemsProcessed += jobSize;
+							nodeNum++;
+						}
+					} 
 
 					return result;
 				}
