@@ -406,6 +406,8 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 					ret.add(false);
 					continue;
 				}
+
+				ret.add(BCrypt.checkpw(passwordString, hashString));
 			}
 
 			return ret;
