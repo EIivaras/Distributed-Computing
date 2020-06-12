@@ -27,7 +27,7 @@ public class Client {
 		// Implement client stub, used to invoke RPC
 		BcryptService.Client client = new BcryptService.Client(protocol);
 		// Open the connection to the server on the socket defined above
-	    transport.open();
+		transport.open();
 
 	    List<String> password = new ArrayList<>();
 	    password.add(args[2]);
