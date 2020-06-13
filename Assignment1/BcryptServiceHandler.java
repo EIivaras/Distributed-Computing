@@ -68,20 +68,28 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 	}
 
 	private class BackendNode {
-		public Boolean bcryptClientActive;
 		public String host;
 		public int port;
+
 		public BcryptService.AsyncClient bcryptClient;
+		public Boolean bcryptClientActive;
 		public TTransport transport;
 		public HashPassCallback hashPassCallback;
 		public CheckPassCallback checkPassCallback;
 
-		public void setHostAndPort(String host, int port) {
-			this.host = host;
-			this.port = port;
+		public int jobStartIndex; /* inclusive start index of input chunk (job) assigned to self */
+		public int jobEndIndex; /* exclusive end index of input chunk (job) assigned to self */
+
+		// Constructor: 
+		// sets front-end host (hostFE) to communicate with, port used by self (portBE), and callbacks
+		public BackendNode(String hostFE, int portBE) {
+			this.host = hostFE;
+			this.port = portBE;
 			this.bcryptClientActive = false;
 			this.hashPassCallback = new HashPassCallback();
 			this.checkPassCallback = new CheckPassCallback();
+			this.jobStartIndex = 0;
+			this.jobEndIndex = 0;
 		}
 
 		public void setClientAndTransport(BcryptService.AsyncClient bcryptClient, TTransport transport) {
@@ -179,10 +187,9 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 		return backendNode;
 	}
 
-	public void initializeBackend(String host, int port) throws IllegalArgument, org.apache.thrift.TException {
+	public void initializeBackend(String hostFE, int portBE) throws IllegalArgument, org.apache.thrift.TException {
 		try {
-			BackendNode backendNode = new BackendNode();
-			backendNode.setHostAndPort(host, port);
+			BackendNode backendNode = new BackendNode(hostFE, portBE);
 			
 			System.out.println("Backend node initialized.");
 			backendNodes.add(backendNode);
@@ -220,12 +227,14 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 					if (jobSize < 1) {
 						// assign entire job (whole password list) to only one free BE node: latch initialized to 1 for "1 async RPC"
 						// TODO: could change behavior below to assign job to less BE nodes, instead of only one
-						
 						usedBENodes.add(backendNodes.get(freeBEIndices.get(0)));
 						backendNode = createBcryptClient(backendNodes.get(freeBEIndices.get(0)));
 						countDownLatch = new CountDownLatch(1);
 						backendNodes.get(freeBEIndices.get(0)).setHashPassLatch(countDownLatch);
 						backendNode.hashPassword(password, logRounds);
+
+						backendNode.jobStartIndex = 0;
+						backendNode.jobEndIndex = jobSize;
 					} else {
 						// split jobs (password list chunks) evenly between all free BE nodes (jobSize >= 1)
 						// set latch (# of async RPCs) to # of free BE nodes 
@@ -243,8 +252,11 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 							usedBENodes.add(backendNodes.get(i));
 							// createBcryptClient() will create the bcryptClient of the node so it can handle requests if it is not created already
 							backendNode = createBcryptClient(backendNodes.get(i));
-							backendNodes.get(i).setHashPassLatch(countDownLatch);
+							backendNode.setHashPassLatch(countDownLatch);
 							backendNode.hashPassword(password.subList(itemsProcessed, (itemsProcessed + jobSize)), logRounds);
+
+							backendNode.jobStartIndex = itemsProcessed;
+							backendNode.jobEndIndex = itemsProcessed + jobSize;
 
 							itemsProcessed += jobSize;
 							nodeNum++;
@@ -257,7 +269,15 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 					// We need to change how insertions into this list work
 					// --> Might need to do this process in a loop until we get all results correctly
 					for (BackendNode node : usedBENodes) {
-						result.addAll(node.getHashPassResults());
+						if (node.checkHashPassErrors().equals(true)) {
+							// BE node encountered error during computation (could be that BENode died)
+							// perform undone job on FENode (self), given start and end ranges of input (chunk) BE node was dealing with
+							for (int i = node.jobStartIndex; i < node.jobEndIndex; i++) {
+								result.add(BCrypt.hashpw(password.get(i), BCrypt.gensalt(logRounds)));
+							}
+						} else {
+							result.addAll(node.getHashPassResults());
+						}
 					}
 
 					return result;
@@ -319,6 +339,9 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 						countDownLatch = new CountDownLatch(1);
 						backendNodes.get(freeBEIndices.get(0)).setCheckPassLatch(countDownLatch);
 						backendNode.checkPassword(password, hash);
+
+						backendNode.jobStartIndex = 0;
+						backendNode.jobEndIndex = jobSize;
 					} else {
 						countDownLatch = new CountDownLatch(freeBEIndices.size());
 						int itemsProcessed = 0;
@@ -334,6 +357,9 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 							backendNodes.get(i).setCheckPassLatch(countDownLatch);
 							backendNode.checkPassword(password.subList(itemsProcessed, (itemsProcessed + jobSize)), hash.subList(itemsProcessed, (itemsProcessed + jobSize)));
 
+							backendNode.jobStartIndex = itemsProcessed;
+							backendNode.jobEndIndex = itemsProcessed + jobSize;
+
 							itemsProcessed += jobSize;
 							nodeNum++;
 						}
@@ -345,7 +371,23 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 					// We need to change how insertions into this list work
 					// --> Might need to do this process in a loop until we get all results correctly
 					for (BackendNode node : usedBENodes) {
-						result.addAll(node.getCheckPassResults());
+						if (node.checkCheckPassErrors().equals(true)) {
+							// BE node encountered error during computation (could be that BENode died)
+							// perform undone job on FENode (self), given start and end ranges of input (chunk) BE node was dealing with
+							for (int i = node.jobStartIndex; i < node.jobEndIndex; i++) {
+								String passwordString = password.get(i);
+								String hashString = hash.get(i);
+				
+								if (hashString.charAt(0) != '$' && hashString.charAt(1) != '2') {
+									result.add(false);
+									continue;
+								}
+				
+								result.add(BCrypt.checkpw(passwordString, hashString));
+							}
+						} else {
+							result.addAll(node.getCheckPassResults());
+						}
 					}
 
 					return result;
@@ -372,7 +414,7 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 				hashString = hash.get(i);
 
 				// We don't want to be throwing an exception, only returning false, for an invalid salt version
-				// checkpw will throw an exception is there is an invalid salt version, so we have to bypass that
+				// checkpw will throw an exception if there is an invalid salt version, so we have to bypass that
 				if (hashString.charAt(0) != '$' && hashString.charAt(1) != '2') {
 					ret.add(false);
 					continue;
