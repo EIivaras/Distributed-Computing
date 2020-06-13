@@ -61,10 +61,16 @@ public class Client {
 		List<String> hashes = client.hashPassword(passwords, (short)10);
 
 		try {
-			client.checkPassword(passwords, hashes);
+			List<Boolean> result = client.checkPassword(passwords, hashes);
+
+			for (int i = 0; i < result.size(); i++) {
+				if (!result.get(i)) {
+					System.out.println("Test case 1 failure because of wrong password and hash combination!\n");
+				}
+			}
 			System.out.println("Test case 1 success!\n");
 		} catch (Exception e) {
-			System.out.println("Test case 1 failure:");
+			System.out.println("Test case 1 failure because of exception:");
 			System.out.println(e.getMessage());
 			System.out.println("\n");
 		}
@@ -93,10 +99,16 @@ public class Client {
 		hashes = client.hashPassword(passwords, (short)10);
 
 		try {
-			client.checkPassword(passwords, hashes);
+			List<Boolean> result = client.checkPassword(passwords, hashes);
+
+			for (int i = 0; i < result.size(); i++) {
+				if (!result.get(i)) {
+					System.out.println("Test case 2 failure because of wrong password and hash combination!\n");
+				}
+			}
 			System.out.println("Test case 2 success!\n");
 		} catch (Exception e) {
-			System.out.println("Test case 2 failure:");
+			System.out.println("Test case 2 failure because of exception:");
 			System.out.println(e.getMessage());
 			System.out.println("\n");
 		}
