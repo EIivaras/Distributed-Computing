@@ -61,10 +61,16 @@ public class Client {
 		List<String> hashes = client.hashPassword(passwords, (short)10);
 
 		try {
-			client.checkPassword(passwords, hashes);
+			List<Boolean> result = client.checkPassword(passwords, hashes);
+
+			for (int i = 0; i < result.size(); i++) {
+				if (!result.get(i)) {
+					System.out.println("Test case 1 failure because of wrong password and hash combination!\n");
+				}
+			}
 			System.out.println("Test case 1 success!\n");
 		} catch (Exception e) {
-			System.out.println("Test case 1 failure:");
+			System.out.println("Test case 1 failure because of exception:");
 			System.out.println(e.getMessage());
 			System.out.println("\n");
 		}
@@ -93,34 +99,60 @@ public class Client {
 		hashes = client.hashPassword(passwords, (short)10);
 
 		try {
-			client.checkPassword(passwords, hashes);
+			List<Boolean> result = client.checkPassword(passwords, hashes);
+
+			for (int i = 0; i < result.size(); i++) {
+				if (!result.get(i)) {
+					System.out.println("Test case 2 failure because of wrong password and hash combination!\n");
+				}
+			}
 			System.out.println("Test case 2 success!\n");
 		} catch (Exception e) {
-			System.out.println("Test case 2 failure:");
+			System.out.println("Test case 2 failure because of exception:");
 			System.out.println(e.getMessage());
 			System.out.println("\n");
 		}
 
-		/*
+		// Test Case 3: The password passed in to hashPassword and checkPassword is an empty string.
+		System.out.println("\nTest case 3: The password passed in to hashPassword and checkPassword is an empty string.");
+
+		passwords = new ArrayList<String>();
+		passwords.add("");
+
+		try {
+			hashes = client.hashPassword(passwords, (short)10);
+			List<Boolean> result = client.checkPassword(passwords, hashes);
+
+			for (int i = 0; i < result.size(); i++) {
+				if (!result.get(i)) {
+					System.out.println("Test case 3 failure because of wrong password and hash combination!\n");
+				}
+			}
+			System.out.println("Test case 3 success!\n");
+		} catch (Exception e) {
+			System.out.println("Test case 3 failure because of exception:");
+			System.out.println(e.getMessage());
+			System.out.println("\n");
+		}
 
 		System.out.println("\n\n~~~~~~~~~~~~~~~~~ Test Cases to test Exception Handling ~~~~~~~~~~~~~~~~~\n\n");
 
-		// Test Case 3: Empty `password` argument to hashPassword
-		System.out.println("\nTest case 3: Empty `password` argument to hashPassword");
+		// Test Case 1: Empty `password` argument to hashPassword
+		System.out.println("\nTest case 1: Empty `password` argument to hashPassword");
 
 		passwords = new ArrayList<String>();
 		
 		try {
 			client.hashPassword(passwords, (short) 10);
-			System.out.println("Test case 3 failure.\n");
+			System.out.println("Test case 2 failure.\n");
 		} catch (Exception e) {
-			System.out.println("Test case 3 success IF illegal argument exception thrown below:");
+			System.out.println("Test case 2 success IF illegal argument exception thrown below:");
 			System.out.println(e.getMessage());
 			System.out.println("\n");
 		}
 
-		// Test Case 4: Empty `password` argument to checkPasswords
-		System.out.println("\nTest case 4: Empty `password` argument to checkPasswords");
+		// Test Case 3: Empty `password` argument to checkPassword
+		System.out.println("\nTest case 3: Empty `password` argument to checkPassword");
 
 		passwords = new ArrayList<String>();
 
@@ -131,6 +163,25 @@ public class Client {
 		
 		try {
 			client.checkPassword(passwords, hashes);
+			System.out.println("Test case 3 failure.\n");
+		} catch (Exception e) {
+			System.out.println("Test case 3 success IF illegal argument expection thrown below:");
+			System.out.println(e.getMessage());
+			System.out.println("\n");
+		}
+
+		// Test Case 4 Empty `hash` argument to checkPassword
+		System.out.println("\nTest case 4: Empty `hash` argument to checkPassword");
+
+		passwords = new ArrayList<String>();
+		passwords.add("Hype");
+		passwords.add("Hype2");
+		passwords.add("Hype3");
+
+		hashes = new ArrayList<String>();
+		
+		try {
+			client.checkPassword(passwords, hashes);
 			System.out.println("Test case 4 failure.\n");
 		} catch (Exception e) {
 			System.out.println("Test case 4 success IF illegal argument expection thrown below:");
@@ -138,14 +189,10 @@ public class Client {
 			System.out.println("\n");
 		}
 
-		// Test Case 5: Empty `hash` argument to checkPassword
-		System.out.println("\nTest case 5: Empty `hash` argument to checkPassword");
+		// Test Case 6: Both arguments empty to checkPassword
+		System.out.println("\nTest case 5: Both arguments empty to checkPassword");
 
 		passwords = new ArrayList<String>();
-		passwords.add("Hype");
-		passwords.add("Hype2");
-		passwords.add("Hype3");
-
 		hashes = new ArrayList<String>();
 		
 		try {
@@ -157,14 +204,14 @@ public class Client {
 			System.out.println("\n");
 		}
 
-		// Test Case 6: Both arguments empty to checkPassword
-		System.out.println("\nTest case 6: Both arguments empty to checkPassword");
+		// Test Case 6: logRounds value < 4 to hashPassword
+		System.out.println("\nTest case 6: logRounds value < 4 to hashPassword");
 
 		passwords = new ArrayList<String>();
-		hashes = new ArrayList<String>();
+		passwords.add("Hype");
 		
 		try {
-			client.checkPassword(passwords, hashes);
+			client.hashPassword(passwords, (short) 3);
 			System.out.println("Test case 6 failure.\n");
 		} catch (Exception e) {
 			System.out.println("Test case 6 success IF illegal argument expection thrown below:");
@@ -172,7 +219,24 @@ public class Client {
 			System.out.println("\n");
 		}
 
-		*/
+		
+		// Test Case 7: The `password` and `hash` arguments to `checkPassword` are of unequal length. 
+		System.out.println("\nTest case 7: Both arguments empty to checkPassword");
+
+		passwords = new ArrayList<String>();
+		passwords.add("Hype");
+		passwords.add("Hype2");
+		hashes = new ArrayList<String>();
+		hashes.add("$2efaefee");
+		
+		try {
+			client.checkPassword(passwords, hashes);
+			System.out.println("Test case 7 failure.\n");
+		} catch (Exception e) {
+			System.out.println("Test case 7 success IF illegal argument expection thrown below:");
+			System.out.println(e.getMessage());
+			System.out.println("\n");
+		}
 
 	    transport.close();
 	} catch (TException x) {
