@@ -4,8 +4,11 @@ import org.apache.log4j.Logger;
 import org.apache.thrift.TProcessorFactory;
 import org.apache.thrift.protocol.TBinaryProtocol;
 import org.apache.thrift.server.TSimpleServer;
+import org.apache.thrift.server.THsHaServer;
 import org.apache.thrift.transport.TServerSocket;
 import org.apache.thrift.transport.TFramedTransport;
+import org.apache.thrift.transport.TNonblockingServerSocket;
+import org.apache.thrift.transport.TNonblockingServerTransport;
 
 
 // NOTE: No matter what the backend does, the client should not see any exceptions whatsoever
@@ -62,20 +65,21 @@ public class FENode {
 		log.info("Launching FE node on port " + portFE);
 
 		// launch Thrift server
+
 		// Create a processor to handler RPC calls
 		BcryptService.Processor processor = new BcryptService.Processor<BcryptService.Iface>(new BcryptServiceHandler());
-		// Create a socket
-		TServerSocket socket = new TServerSocket(portFE);
-		// Attach socket to server so that server accepts requests incoming on this socket
-		TSimpleServer.Args sargs = new TSimpleServer.Args(socket);
+
+		// Create a socket and transport
+		TNonblockingServerTransport transport = new TNonblockingServerSocket(portFE);
+		THsHaServer.Args sargs = new THsHaServer.Args(transport);
 		// Set server arguments
 		sargs.protocolFactory(new TBinaryProtocol.Factory());
 		sargs.transportFactory(new TFramedTransport.Factory());
 		sargs.processorFactory(new TProcessorFactory(processor));
+		sargs.maxWorkerThreads(16);
+		// Create new server
+		THsHaServer server = new THsHaServer(sargs);
 		// Run the server, it can now accept RPC calls
-		TSimpleServer server = new TSimpleServer(sargs);
 		server.serve();
-
-		// TODO: Open a socket to get data from the backend node(s) (?)
     }
 }
