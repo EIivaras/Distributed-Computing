@@ -5,7 +5,9 @@ import org.apache.log4j.Logger;
 
 import org.apache.thrift.TProcessorFactory;
 import org.apache.thrift.protocol.TBinaryProtocol;
+import org.apache.thrift.server.TServer;
 import org.apache.thrift.server.TSimpleServer;
+import org.apache.thrift.server.TThreadPoolServer;
 import org.apache.thrift.transport.TServerSocket;
 import org.apache.thrift.transport.TFramedTransport;
 import org.apache.thrift.protocol.TProtocol;
@@ -52,18 +54,16 @@ public class BENode {
 		client.initializeBackend(hostFE, portBE);
 		transport.close();
 
-		// launch Thrift server
 		BcryptService.Processor processor = new BcryptService.Processor<BcryptService.Iface>(new BcryptServiceHandler());
+		
 		TServerSocket socket = new TServerSocket(portBE);
-		TSimpleServer.Args sargs = new TSimpleServer.Args(socket);
+		TThreadPoolServer.Args sargs = new TThreadPoolServer.Args(socket);
+
 		sargs.protocolFactory(new TBinaryProtocol.Factory());
 		sargs.transportFactory(new TFramedTransport.Factory());
 		sargs.processorFactory(new TProcessorFactory(processor));
 
-		// TODO: Figure out how threading is going to work
-		
-		//sargs.maxWorkerThreads(64);
-		TSimpleServer server = new TSimpleServer(sargs);
+		TThreadPoolServer server = new TThreadPoolServer(sargs);
 		server.serve();
     }
 
