@@ -101,14 +101,20 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 
 		public void hashPassword(List<String> password, short logRounds) throws IllegalArgument, org.apache.thrift.TException {
 			System.out.println("Starting hashPassword at backend.");
-			this.hashPassCallback.isWorking = true;
 			this.bcryptClient.hashPasswordBE(password, logRounds, this.hashPassCallback);
 		}
 
 		public void checkPassword(List<String> password, List<String> hash) throws IllegalArgument, org.apache.thrift.TException {
 			System.out.println("Starting checkPassword at backend.");
-			this.checkPassCallback.isWorking = true;
 			this.bcryptClient.checkPasswordBE(password, hash, this.checkPassCallback);
+		}
+
+		public void setHashPasswordInProgress() {
+			this.hashPassCallback.isWorking = true;
+		}
+
+		public void setCheckPasswordInProgress() {
+			this.checkPassCallback.isWorking = true;
 		}
 
 		public boolean isBcryptClientActive() {
@@ -204,10 +210,10 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 			try {
 				List<BackendNode> nodesForUse = new ArrayList<>();
 				List<BackendNode> usedBENodes = new ArrayList<>();
+				List<BackendNode> removalList = new ArrayList<BackendNode>();
 
 				// Initialize Backend Nodes if not already initialized, and remove any who are disconnected or fail to initialize
 
-				List<BackendNode> removalList = new ArrayList<BackendNode>();
 				synchronized (backendNodes) {
 					for (int i = 0; i < backendNodes.size(); i++) {
 						initializeBcryptClient(backendNodes.get(i));
@@ -224,62 +230,51 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 							nodesForUse.add(backendNodes.get(i));
 						}
 					}
+
+					if (nodesForUse.size() > 0) {
+						int jobSize = password.size() / nodesForUse.size();
+
+						if (jobSize < 1) {
+							usedBENodes.add(nodesForUse.get(0));
+							usedBENodes.get(0).setHashPasswordInProgress();
+						} else {
+							usedBENodes = nodesForUse;
+							for (int i = 0; i < usedBENodes.size(); i++) {
+								usedBENodes.get(i).setHashPasswordInProgress();
+							}
+						}
+					}
 				}
 
 				// if found one or more free backend nodes, split work evenly between them
-				if (nodesForUse.size() > 0) {
-					BackendNode backendNode = null;
-					CountDownLatch countDownLatch = null;
+				if (usedBENodes.size() > 0) {
+					CountDownLatch countDownLatch = new CountDownLatch(usedBENodes.size());;
 
-					// # of items to be processed by current node 
-					int jobSize = password.size() / nodesForUse.size();
-			
-					if (jobSize < 1) {
-						// assign entire job (whole password list) to only one free BE node: latch initialized to 1 for "1 async RPC"
-						usedBENodes.add(nodesForUse.get(0));
-						backendNode = usedBENodes.get(0);
-						countDownLatch = new CountDownLatch(1);
-						backendNode.setHashPassLatch(countDownLatch);
+					int jobSize = password.size() / usedBENodes.size();
 
+					// # of items to be processed by current node  
+					int itemsProcessed = 0;
+					
+					int nodeNum = 1;
+					for (BackendNode node : usedBENodes){
+						if (nodeNum == usedBENodes.size()){
+							// handle all remaining items in last job (executed by last freeBE available)
+							jobSize = password.size() - itemsProcessed;
+						}
+
+						// createBcryptClient() will create the bcryptClient of the node so it can handle requests if it is not created already
+						node.setHashPassLatch(countDownLatch);
 						try {
-							backendNode.hashPassword(password, logRounds);
+							node.hashPassword(password.subList(itemsProcessed, (itemsProcessed + jobSize)), logRounds);
 						} catch (Exception e) {
 							System.out.println("Error as backend node tried to hash password.");
 							System.out.println(e.getMessage());
 						}
-						
-						backendNode.jobStartIndex = 0;
-						backendNode.jobEndIndex = password.size();
-					} else {
-						// split jobs (password list chunks) evenly between all free BE nodes (jobSize >= 1)
-						// set latch (# of async RPCs) to # of free BE nodes 
-						countDownLatch = new CountDownLatch(nodesForUse.size());
-						// # of items (passwords/hashes) being processed + # of items finished processing (ASSUMES ASYNC RPC) 
-						int itemsProcessed = 0;
-						
-						int nodeNum = 1;
-						for (BackendNode node : nodesForUse){
-							if (nodeNum == nodesForUse.size()){
-								// handle all remaining items in last job (executed by last freeBE available)
-								jobSize = password.size() - itemsProcessed;
-							}
+						node.jobStartIndex = itemsProcessed;
+						node.jobEndIndex = itemsProcessed + jobSize;
 
-							usedBENodes.add(node);
-							// createBcryptClient() will create the bcryptClient of the node so it can handle requests if it is not created already
-							backendNode = node;
-							backendNode.setHashPassLatch(countDownLatch);
-							try {
-								backendNode.hashPassword(password.subList(itemsProcessed, (itemsProcessed + jobSize)), logRounds);
-							} catch (Exception e) {
-								System.out.println("Error as backend node tried to hash password.");
-								System.out.println(e.getMessage());
-							}
-							backendNode.jobStartIndex = itemsProcessed;
-							backendNode.jobEndIndex = itemsProcessed + jobSize;
-
-							itemsProcessed += jobSize;
-							nodeNum++;
-						}
+						itemsProcessed += jobSize;
+						nodeNum++;
 					} 
 
 					countDownLatch.await();
@@ -347,11 +342,12 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 			try {
 				List<BackendNode> nodesForUse = new ArrayList<>();
 				List<BackendNode> usedBENodes = new ArrayList<>();
+				List<BackendNode> removalList = new ArrayList<BackendNode>();
+
 
 				// Initialize Backend Nodes if not already initialized, and remove any who are disconnected or fail to initialize
 
-				synchronized(backendNodes) {
-					List<BackendNode> removalList = new ArrayList<BackendNode>();
+				synchronized (backendNodes) {
 					for (int i = 0; i < backendNodes.size(); i++) {
 						initializeBcryptClient(backendNodes.get(i));
 						if (backendNodes.get(i).isBcryptClientInError()) {
@@ -367,58 +363,49 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 							nodesForUse.add(backendNodes.get(i));
 						}
 					}
+
+					if (nodesForUse.size() > 0) {
+						int jobSize = password.size() / nodesForUse.size();
+
+						if (jobSize < 1) {
+							usedBENodes.add(nodesForUse.get(0));
+							usedBENodes.get(0).setCheckPasswordInProgress();
+						} else {
+							usedBENodes = nodesForUse;
+							for (int i = 0; i < usedBENodes.size(); i++) {
+								usedBENodes.get(i).setCheckPasswordInProgress();
+							}
+						}
+					}
 				}
 				
 				// if found one or more free backend nodes, split work evenly between them
-				if (nodesForUse.size() > 0) {
-					BackendNode backendNode = null;
-					CountDownLatch countDownLatch = null;
+				if (usedBENodes.size() > 0) {
+					CountDownLatch countDownLatch = new CountDownLatch(usedBENodes.size());;
 
 					// # of items to be processed by current node 
-					int jobSize = password.size() / nodesForUse.size();
-			
-					if (jobSize < 1) {
-						// assign entire job (whole password list) to only one free BE node: latch initialized to 1 for "1 async RPC"
-						usedBENodes.add(nodesForUse.get(0));
-						backendNode = usedBENodes.get(0);
-						countDownLatch = new CountDownLatch(1);
-						backendNode.setCheckPassLatch(countDownLatch);
+					int jobSize = password.size() / usedBENodes.size();
+					int itemsProcessed = 0;
+					
+					int nodeNum = 1;
+					for (BackendNode node : usedBENodes){
+						if (nodeNum == usedBENodes.size()){
+							jobSize = password.size() - itemsProcessed;
+						}
 
+						node.setCheckPassLatch(countDownLatch);
 						try {
-							backendNode.checkPassword(password, hash);
+							node.checkPassword(password.subList(itemsProcessed, (itemsProcessed + jobSize)), hash.subList(itemsProcessed, (itemsProcessed + jobSize)));
 						} catch (Exception e) {
 							System.out.println("Error as backend node tried to check password.");
 							System.out.println(e.getMessage());
 						}
-						
-						backendNode.jobStartIndex = 0;
-						backendNode.jobEndIndex = password.size();
-					} else {
-						countDownLatch = new CountDownLatch(nodesForUse.size());
-						int itemsProcessed = 0;
-						
-						int nodeNum = 1;
-						for (BackendNode node : nodesForUse){
-							if (nodeNum == nodesForUse.size()){
-								jobSize = password.size() - itemsProcessed;
-							}
+						node.jobStartIndex = itemsProcessed;
+						node.jobEndIndex = itemsProcessed + jobSize;
 
-							usedBENodes.add(node);
-							backendNode = node;
-							node.setCheckPassLatch(countDownLatch);
-							try {
-								backendNode.checkPassword(password.subList(itemsProcessed, (itemsProcessed + jobSize)), hash.subList(itemsProcessed, (itemsProcessed + jobSize)));
-							} catch (Exception e) {
-								System.out.println("Error as backend node tried to check password.");
-								System.out.println(e.getMessage());
-							}
-							backendNode.jobStartIndex = itemsProcessed;
-							backendNode.jobEndIndex = itemsProcessed + jobSize;
-
-							itemsProcessed += jobSize;
-							nodeNum++;
-						}
-					} 
+						itemsProcessed += jobSize;
+						nodeNum++;
+					}
 
 					countDownLatch.await();
 

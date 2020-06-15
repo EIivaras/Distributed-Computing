@@ -238,7 +238,31 @@ public class Client {
 			System.out.println("\n");
 		}
 
-	    transport.close();
+		transport.close();
+		
+		System.out.println("\n\n~~~~~~~~~~~~~~~~~ Multi-threaded Test Cases ~~~~~~~~~~~~~~~~~\n\n");
+
+		System.out.println("\n Test case 1: 4 Clients with 4 Passwords each");
+
+		List<MultithreadedClient> multithreadedClients = new ArrayList<MultithreadedClient>();
+
+		for (int i = 0; i < 4; i++) {
+			multithreadedClients.add(new MultithreadedClient(args[0], Integer.parseInt(args[1]), i));
+		}
+
+		for (int i = 0; i < 4; i++) {
+			multithreadedClients.get(i).start();
+		}
+
+		for (int i = 0; i < 4; i++) {
+			try {
+				multithreadedClients.get(i).join();;
+			} catch (Exception e) {
+				System.out.println("Thread interrupted during execution. Exception:");
+				System.out.println(e.getMessage());
+			}
+		}
+
 	} catch (TException x) {
 	    x.printStackTrace();
 	} 
