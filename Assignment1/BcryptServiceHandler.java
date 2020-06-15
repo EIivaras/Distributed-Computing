@@ -130,7 +130,6 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 				}
 
 				hashPassCallbackList.get(index).countDownLatch = countDownLatch;
-				int temp = itemsProcessed + threadJobSize;
 				try {
 					bcryptClient.hashPasswordBE(password.subList(itemsProcessed, (itemsProcessed + threadJobSize)), logRounds, hashPassCallbackList.get(index));
 				} catch (Exception e) {
@@ -167,7 +166,6 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 				}
 
 				checkPassCallbackList.get(index).countDownLatch = countDownLatch;
-				int temp = itemsProcessed + threadJobSize;
 				try {
 					bcryptClient.checkPasswordBE(password.subList(itemsProcessed, (itemsProcessed + threadJobSize)), hash.subList(itemsProcessed, (itemsProcessed + threadJobSize)), checkPassCallbackList.get(index));
 				} catch (Exception e) {
