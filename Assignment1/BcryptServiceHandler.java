@@ -17,6 +17,7 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 
 	private int numThreadsPerBENode = 2;
 	private List<BackendNode> backendNodes = Collections.synchronizedList(new ArrayList<BackendNode>()); /* backend nodes that are up & running */
+	private TAsyncClientManager cm = null;
 
 	private class HashPassCallback implements AsyncMethodCallback<List<String>> {
 
@@ -183,7 +184,9 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 
 	public void initializeBackend(String hostFE, int portBE) throws IllegalArgument, org.apache.thrift.TException {
 		try {
-			TAsyncClientManager cm = new TAsyncClientManager();
+			if (cm == null) {
+				cm = new TAsyncClientManager();
+			}
 
 			synchronized(backendNodes) {
 				for (int i = 0; i < numThreadsPerBENode; i++) {
@@ -251,7 +254,7 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 								usedBENodes.add(nodesForUse.get(i));
 							}
 						}
-						
+
 						for (int i = 0; i < usedBENodes.size(); i++) {
 							usedBENodes.get(i).startedWorking();
 						}
