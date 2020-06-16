@@ -5,6 +5,7 @@ import org.apache.thrift.TProcessorFactory;
 import org.apache.thrift.protocol.TBinaryProtocol;
 import org.apache.thrift.server.TSimpleServer;
 import org.apache.thrift.server.THsHaServer;
+import org.apache.thrift.server.TThreadPoolServer;
 import org.apache.thrift.transport.TServerSocket;
 import org.apache.thrift.transport.TFramedTransport;
 import org.apache.thrift.transport.TNonblockingServerSocket;
@@ -68,18 +69,28 @@ public class FENode {
 
 		// Create a processor to handler RPC calls
 		BcryptService.Processor processor = new BcryptService.Processor<BcryptService.Iface>(new BcryptServiceHandler());
+		
+		TServerSocket socket = new TServerSocket(portFE);
+		TThreadPoolServer.Args sargs = new TThreadPoolServer.Args(socket);
 
-		// Create a socket and transport
-		TNonblockingServerTransport transport = new TNonblockingServerSocket(portFE);
-		THsHaServer.Args sargs = new THsHaServer.Args(transport);
-		// Set server arguments
 		sargs.protocolFactory(new TBinaryProtocol.Factory());
 		sargs.transportFactory(new TFramedTransport.Factory());
 		sargs.processorFactory(new TProcessorFactory(processor));
-		sargs.maxWorkerThreads(16);
-		// Create new server
-		THsHaServer server = new THsHaServer(sargs);
-		// Run the server, it can now accept RPC calls
+
+		TThreadPoolServer server = new TThreadPoolServer(sargs);
 		server.serve();
+
+		//// Create a socket and transport
+		//TNonblockingServerTransport transport = new TNonblockingServerSocket(portFE);
+		//THsHaServer.Args sargs = new THsHaServer.Args(transport);
+		//// Set server arguments
+		//sargs.protocolFactory(new TBinaryProtocol.Factory());
+		//sargs.transportFactory(new TFramedTransport.Factory());
+		//sargs.processorFactory(new TProcessorFactory(processor));
+		//sargs.maxWorkerThreads(16);
+		//// Create new server
+		//THsHaServer server = new THsHaServer(sargs);
+		//// Run the server, it can now accept RPC calls
+		//server.serve();
     }
 }
