@@ -25,7 +25,7 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 		public boolean hadError = false;
 
 		public void onComplete(List<String> response) {
-			System.out.println("Completed hashPassword at backend.");
+			//System.out.println("Completed hashPassword at backend.");
 			this.resultList = response;
 			this.hadError = false;
 			
@@ -46,7 +46,7 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 		public boolean hadError = false;
 
 		public void onComplete (List<Boolean> response) {
-			System.out.println("Completed checkPassword at backend.");
+			//System.out.println("Completed checkPassword at backend.");
 			resultList = response;
 			this.hadError = false;
 
@@ -265,6 +265,7 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 					}
 				}
 
+
 				// if found one or more free backend nodes, split work evenly between them
 				if (usedBENodes.size() > 0) {
 					int jobSize = password.size() / usedBENodes.size();
@@ -303,18 +304,35 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 					List<Integer> jobEndIndexes = new ArrayList<Integer>();
 
 					int index = 0;
-					for (BackendNode node : usedBENodes) {
-						if (node.checkHashPassErrors().equals(true)) {
-							node.bcryptClientInError();
-							resultIndexesInError.add(index);
-							jobStartIndexes.add(node.jobStartIndex);
-							jobEndIndexes.add(node.jobEndIndex);
 
-						} else {
-							resultLists.add(index, node.getHashPassResults());
-							node.finishedWorking();
+
+					try {
+						for (BackendNode node : usedBENodes) {
+							if (node.checkHashPassErrors().equals(true)) {
+								node.bcryptClientInError();
+								resultIndexesInError.add(index);
+								jobStartIndexes.add(node.jobStartIndex);
+								jobEndIndexes.add(node.jobEndIndex);
+							} else {
+								try {
+									node.finishedWorking();
+								} catch (Exception e) {
+									System.out.println("Exception 2: ");
+									System.out.println(e.getMessage());
+								}
+								try {
+									resultLists.add(index, node.getHashPassResults());
+								} catch (Exception e) {
+									System.out.println("Exception 3: ");
+									System.out.println(e.getMessage());
+								}
+
+							}
+							index++;
 						}
-						index++;
+					} catch (Exception e) {
+						System.out.println("Exception: ");
+						System.out.println(e.getMessage());
 					}
 
 					for (int i = 0; i < resultIndexesInError.size(); i++) {
