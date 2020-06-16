@@ -99,12 +99,12 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 		}
 
 		public void hashPassword(List<String> password, short logRounds) throws IllegalArgument, org.apache.thrift.TException {
-			System.out.println("Starting hashPassword at backend.");
+			//System.out.println("Starting hashPassword at backend.");
 			this.bcryptClient.hashPasswordBE(password, logRounds, this.hashPassCallback);
 		}
 
 		public void checkPassword(List<String> password, List<String> hash) throws IllegalArgument, org.apache.thrift.TException {
-			System.out.println("Starting checkPassword at backend.");
+			//System.out.println("Starting checkPassword at backend.");
 			this.bcryptClient.checkPasswordBE(password, hash, this.checkPassCallback);
 		}
 
@@ -247,18 +247,10 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 							usedBENodes = nodesForUse;
 						} else {
 							int nodesToAssign = password.size();
-							System.out.println("HP - Nodes to Assign: " + nodesToAssign + ", passwords: " + password.size() + ", nodesForUse: " + nodesForUse.size());
 							for (int i = 0; i < nodesToAssign; i++) {
 								usedBENodes.add(nodesForUse.get(i));
 							}
 						}
-
-						//if (jobSize < 1) {
-						//	usedBENodes.add(nodesForUse.get(0));
-						//} else {
-						//	usedBENodes = nodesForUse;
-						//}
-
 						for (int i = 0; i < usedBENodes.size(); i++) {
 							usedBENodes.get(i).startedWorking();
 						}
@@ -305,37 +297,21 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 
 					int index = 0;
 
-
-					try {
-						for (BackendNode node : usedBENodes) {
-							if (node.checkHashPassErrors().equals(true)) {
-								node.bcryptClientInError();
-								resultIndexesInError.add(index);
-								jobStartIndexes.add(node.jobStartIndex);
-								jobEndIndexes.add(node.jobEndIndex);
-							} else {
-								try {
-									node.finishedWorking();
-								} catch (Exception e) {
-									System.out.println("Exception 2: ");
-									System.out.println(e.getMessage());
-								}
-								try {
-									resultLists.add(index, node.getHashPassResults());
-								} catch (Exception e) {
-									System.out.println("Exception 3: ");
-									System.out.println(e.getMessage());
-								}
-
-							}
-							index++;
+					for (BackendNode node : usedBENodes) {
+						if (node.checkHashPassErrors().equals(true)) {
+							node.bcryptClientInError();
+							resultIndexesInError.add(index);
+							jobStartIndexes.add(node.jobStartIndex);
+							jobEndIndexes.add(node.jobEndIndex);
+						} else {
+							node.finishedWorking();
+							resultLists.add(index, node.getHashPassResults());
 						}
-					} catch (Exception e) {
-						System.out.println("Exception: ");
-						System.out.println(e.getMessage());
+						index++;
 					}
 
 					for (int i = 0; i < resultIndexesInError.size(); i++) {
+						System.out.println("Backend node was in error, recursively calling cP from start index " + jobStartIndexes.get(i) + " to end index " + jobEndIndexes.get(i) + ".");
 						List<String> partialResult = hashPassword(password.subList(jobStartIndexes.get(i), jobEndIndexes.get(i)), logRounds);
 						resultLists.add(resultIndexesInError.get(i), partialResult);	
 					}
@@ -346,14 +322,12 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 				} else {
 					// If no free BEs, do the work yourself
 
-					System.out.println("No free BEs, doing hashPassword work at frontend.");
+					//System.out.println("No free BEs, doing hashPassword work at frontend.");
 
 					for (int i = 0; i < password.size(); i++) {
 						result.add(BCrypt.hashpw(password.get(i), BCrypt.gensalt(logRounds)));
 					}
-
-					System.out.println("Finished hashPassword work at frontend.");
-
+					//System.out.println("Finished hashPassword work at frontend.");
 				}
 			} catch (Exception e) {
 				System.out.println("Error in frontend hashPassword method:");
@@ -407,17 +381,10 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 							usedBENodes = nodesForUse;
 						} else {
 							int nodesToAssign = password.size();
-							System.out.println("CP - Nodes to Assign: " + nodesToAssign + ", passwords: " + password.size() + ", nodesForUse: " + nodesForUse.size());
 							for (int i = 0; i < nodesToAssign; i++) {
 								usedBENodes.add(nodesForUse.get(i));
 							}
 						}
-
-						//if (jobSize < 1) {
-						//	usedBENodes.add(nodesForUse.get(0));
-						//} else {
-						//	usedBENodes = nodesForUse;
-						//}
 
 						for (int i = 0; i < usedBENodes.size(); i++) {
 							usedBENodes.get(i).startedWorking();
@@ -489,7 +456,7 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 				} else {
 					// If no free BEs, do the work yourself
 
-					System.out.println("No free BEs, doing checkPassword work at frontend.");
+					//System.out.println("No free BEs, doing checkPassword work at frontend.");
 					for (int i = 0; i < password.size(); i++) {
 						String passwordString = password.get(i);
 						String hashString = hash.get(i);
@@ -501,7 +468,7 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 		
 						result.add(BCrypt.checkpw(passwordString, hashString));
 					}
-					System.out.println("Finished checkPassword work at frontend.");
+					//System.out.println("Finished checkPassword work at frontend.");
 				}
 			} catch (Exception e) {
 				System.out.println("Error in frontend checkPassword method:");
