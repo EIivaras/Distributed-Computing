@@ -15,7 +15,7 @@ import org.apache.thrift.transport.TTransport;
 
 public class BcryptServiceHandler implements BcryptService.Iface {
 
-	private int numThreadsPerBENode = 3;
+	private int numThreadsPerBENode = 2;
 	private List<BackendNode> backendNodes = Collections.synchronizedList(new ArrayList<BackendNode>()); /* backend nodes that are up & running */
 
 	private class HashPassCallback implements AsyncMethodCallback<List<String>> {
