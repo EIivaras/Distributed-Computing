@@ -16,7 +16,6 @@ import org.apache.thrift.transport.TTransport;
 public class BcryptServiceHandler implements BcryptService.Iface {
 
 	private int numThreadsPerBENode = 2;
-
 	private List<BackendNode> backendNodes = Collections.synchronizedList(new ArrayList<BackendNode>()); /* backend nodes that are up & running */
 
 	private class HashPassCallback implements AsyncMethodCallback<List<String>> {
@@ -66,113 +65,47 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 		public String host;
 		public int port;
 
-		public List<BcryptService.AsyncClient> bcryptClientList;
-		public List<BcryptService.AsyncClient> bcryptClientsInUse;
+		public TAsyncClientManager clientManager;
+		public BcryptService.AsyncClient bcryptClient;
 		public Boolean bcryptClientActive;
 		public Boolean inError;
 		public Boolean isWorking;
-		public List<HashPassCallback> hashPassCallbackList;
-		public List<CheckPassCallback> checkPassCallbackList;
+		public TTransport transport;
+		public HashPassCallback hashPassCallback;
+		public CheckPassCallback checkPassCallback;
 
 		public int jobStartIndex; /* inclusive start index of input chunk (job) assigned to self */
 		public int jobEndIndex; /* exclusive end index of input chunk (job) assigned to self */
 
 		// Constructor: 
 		// sets front-end host (hostFE) to communicate with, port used by self (portBE), and callbacks
-		public BackendNode(String hostFE, int portBE) {
+		public BackendNode(String hostFE, int portBE, TAsyncClientManager clientManager) {
 			this.host = hostFE;
 			this.port = portBE;
-			this.bcryptClientList = null;
-			this.bcryptClientsInUse = new ArrayList<BcryptService.AsyncClient>();
 			this.bcryptClientActive = false;
 			this.inError = false;
 			this.isWorking = false;
+			this.hashPassCallback = new HashPassCallback();
+			this.checkPassCallback = new CheckPassCallback();
 			this.jobStartIndex = 0;
 			this.jobEndIndex = 0;
-			this.hashPassCallbackList = new ArrayList<HashPassCallback>();
-			this.checkPassCallbackList = new ArrayList<CheckPassCallback>();
-
-			for (int i = 0; i < numThreadsPerBENode; i++) {
-				hashPassCallbackList.add(new HashPassCallback());
-				checkPassCallbackList.add(new CheckPassCallback());
-			}
+			this.clientManager = clientManager;
 		}
 
-		public void setClient(List<BcryptService.AsyncClient> bcryptClientList) {
-			this.bcryptClientList = bcryptClientList;
+		public void setClientAndTransport(BcryptService.AsyncClient bcryptClient, TTransport transport) {
+			this.bcryptClient = bcryptClient;
+			this.transport = transport;
 			this.bcryptClientActive = true;
 		}
 
-		public void hashPassword(List<String> password, short logRounds, CountDownLatch countDownLatch) throws IllegalArgument, org.apache.thrift.TException {
-			//System.out.println("Starting hashPassword at backend.");
-
-			int threadJobSize = password.size() / numThreadsPerBENode;
-			this.bcryptClientsInUse = new ArrayList<BcryptService.AsyncClient>();
-
-			if (threadJobSize < 1) {
-				this.bcryptClientsInUse.add(this.bcryptClientList.get(0));
-			} else {
-				for (int i = 0; i < bcryptClientList.size(); i++) {
-					this.bcryptClientsInUse.add(this.bcryptClientList.get(i));
-				}
-			}
-
-			int itemsProcessed = 0;
-			int index = 0;
-			int nodeNum = 1;
-			for (BcryptService.AsyncClient bcryptClient : this.bcryptClientsInUse) {
-				if (nodeNum == this.bcryptClientsInUse.size()){
-					threadJobSize = password.size() - itemsProcessed;
-				}
-
-				hashPassCallbackList.get(index).countDownLatch = countDownLatch;
-				try {
-					bcryptClient.hashPasswordBE(password.subList(itemsProcessed, (itemsProcessed + threadJobSize)), logRounds, hashPassCallbackList.get(index));
-				} catch (Exception e) {
-					System.out.println("Error as backend node tried to hash password.");
-					System.out.println(e.getMessage());
-				}
-
-				itemsProcessed += threadJobSize;
-				nodeNum++;
-				index++;
-			}
+		public void hashPassword(List<String> password, short logRounds) throws IllegalArgument, org.apache.thrift.TException {
+			System.out.println("Starting hashPassword at backend.");
+			this.bcryptClient.hashPasswordBE(password, logRounds, this.hashPassCallback);
 		}
 
-		public void checkPassword(List<String> password, List<String> hash, CountDownLatch countDownLatch) throws IllegalArgument, org.apache.thrift.TException {
-			//System.out.println("Starting checkPassword at backend.");
-
-			int threadJobSize = password.size() / numThreadsPerBENode;
-			this.bcryptClientsInUse = new ArrayList<BcryptService.AsyncClient>();
-
-			if (threadJobSize < 1) {
-				this.bcryptClientsInUse.add(this.bcryptClientList.get(0));
-			} else {
-				for (int i = 0; i < bcryptClientList.size(); i++) {
-					this.bcryptClientsInUse.add(this.bcryptClientList.get(i));
-				}
-			}
-
-			int itemsProcessed = 0;
-			int index = 0;
-			int nodeNum = 1;
-			for (BcryptService.AsyncClient bcryptClient : this.bcryptClientsInUse) {
-				if (nodeNum ==  this.bcryptClientsInUse.size()){
-					threadJobSize = password.size() - itemsProcessed;
-				}
-
-				checkPassCallbackList.get(index).countDownLatch = countDownLatch;
-				try {
-					bcryptClient.checkPasswordBE(password.subList(itemsProcessed, (itemsProcessed + threadJobSize)), hash.subList(itemsProcessed, (itemsProcessed + threadJobSize)), checkPassCallbackList.get(index));
-				} catch (Exception e) {
-					System.out.println("Error as backend node tried to check password.");
-					System.out.println(e.getMessage());
-				}
-
-				itemsProcessed += threadJobSize;
-				nodeNum++;
-				index++;
-			}
+		public void checkPassword(List<String> password, List<String> hash) throws IllegalArgument, org.apache.thrift.TException {
+			System.out.println("Starting checkPassword at backend.");
+			this.bcryptClient.checkPasswordBE(password, hash, this.checkPassCallback);
 		}
 
 		public boolean isBcryptClientActive() {
@@ -188,47 +121,27 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 		}
 
 		public List<String> getHashPassResults() {
-			List<String> results = new ArrayList<String>();
-
-			try {
-				System.out.println("clientsInUse: " + this.bcryptClientsInUse);
-				System.out.println("hashPassListSize: " + this.hashPassCallbackList.size());
-
-				for (int i = 0; i < this.bcryptClientsInUse.size(); i++) {
-					results.addAll(this.hashPassCallbackList.get(i).resultList);
-				}
-			} catch (Exception e) {
-				System.out.println("Exception in getHashPassResults:");
-				System.out.println(e.getMessage());
-			}
-
-			return results;
+			return this.hashPassCallback.resultList;
 		}
 
 		public List<Boolean> getCheckPassResults() {
-			List<Boolean> results = new ArrayList<Boolean>();
-			for (int i = 0; i < this.bcryptClientsInUse.size(); i++) {
-				results.addAll(this.checkPassCallbackList.get(i).resultList);
-			}
-			return results;
+			return this.checkPassCallback.resultList;
 		}
 
 		public Boolean checkHashPassErrors() {
-			for (int i = 0; i < this.bcryptClientsInUse.size(); i++) {
-				if (this.hashPassCallbackList.get(i).hadError) {
-					return true;
-				}
-			}
-			return false;
+			return this.hashPassCallback.hadError;
 		}
 
 		public Boolean checkCheckPassErrors() {
-			for (int i = 0; i < this.bcryptClientsInUse.size(); i++) {
-				if (this.checkPassCallbackList.get(i).hadError) {
-					return true;
-				}
-			}
-			return false;
+			return this.checkPassCallback.hadError;
+		}
+
+		public void setHashPassLatch(CountDownLatch countDownLatch) {
+			this.hashPassCallback.countDownLatch = countDownLatch;
+		}
+
+		public void setCheckPassLatch(CountDownLatch countDownLatch) {
+			this.checkPassCallback.countDownLatch = countDownLatch;
 		}
 
 		public boolean isWorking() {
@@ -252,17 +165,12 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 		}
 
 		try {
-			List<BcryptService.AsyncClient> bcryptClientList = new ArrayList<BcryptService.AsyncClient>();
+			TNonblockingTransport transport = new TNonblockingSocket(backendNode.host, backendNode.port);
+			TProtocolFactory pf = new TBinaryProtocol.Factory();
+			TAsyncClientManager cm = backendNode.clientManager;
+			BcryptService.AsyncClient bcryptClient = new BcryptService.AsyncClient(pf, cm, transport);	
 
-			TAsyncClientManager cm = new TAsyncClientManager();
-
-			for (int i = 0; i < numThreadsPerBENode; i++) {
-				TNonblockingTransport transport = new TNonblockingSocket(backendNode.host, backendNode.port);
-				TProtocolFactory pf = new TBinaryProtocol.Factory();
-				bcryptClientList.add(new BcryptService.AsyncClient(pf, cm, transport));
-			}
-
-			backendNode.setClient(bcryptClientList);	
+			backendNode.setClientAndTransport(bcryptClient, transport);	
 
 			return;
 		}  catch (Exception e) {
@@ -275,12 +183,17 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 
 	public void initializeBackend(String hostFE, int portBE) throws IllegalArgument, org.apache.thrift.TException {
 		try {
-			BackendNode backendNode = new BackendNode(hostFE, portBE);
-			
-			System.out.println("Backend node initialized.");
+			TAsyncClientManager cm = new TAsyncClientManager();
+
 			synchronized(backendNodes) {
-				backendNodes.add(backendNode);
+				for (int i = 0; i < numThreadsPerBENode; i++) {
+					BackendNode backendNode = new BackendNode(hostFE, portBE, cm);
+						backendNodes.add(backendNode);
+				}
 			}
+
+			System.out.println("Backend node initialized with " + this.numThreadsPerBENode + " threads.");
+
 		}
 		catch (Exception e) {
 			System.out.println("Error initializing backend.");
@@ -329,11 +242,22 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 						// TODO: If we have 4 backend nodes and we get a request of 4 passwords, we probably shouldn't split between the 4 nodes
 							// Look into adjusting this. Perhaps <= ?
 						// TODO: But then what about 5? Do we split that? Or 6? Etc?
-						if (jobSize < 1) {
-							usedBENodes.add(nodesForUse.get(0));
-						} else {
+
+						if (jobSize >= 1) {
 							usedBENodes = nodesForUse;
+						} else {
+							int nodesToAssign = password.size();
+							System.out.println("HP - Nodes to Assign: " + nodesToAssign + ", passwords: " + password.size() + ", nodesForUse: " + nodesForUse.size());
+							for (int i = 0; i < nodesToAssign; i++) {
+								usedBENodes.add(nodesForUse.get(i));
+							}
 						}
+
+						//if (jobSize < 1) {
+						//	usedBENodes.add(nodesForUse.get(0));
+						//} else {
+						//	usedBENodes = nodesForUse;
+						//}
 
 						for (int i = 0; i < usedBENodes.size(); i++) {
 							usedBENodes.get(i).startedWorking();
@@ -345,14 +269,9 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 				// if found one or more free backend nodes, split work evenly between them
 				if (usedBENodes.size() > 0) {
 					int jobSize = password.size() / usedBENodes.size();
-					int threadJobSize = password.size() / (usedBENodes.size() * numThreadsPerBENode);
 
-					CountDownLatch countDownLatch;
-					if (threadJobSize < 1) {
-						countDownLatch = new CountDownLatch(usedBENodes.size());
-					} else {
-						countDownLatch = new CountDownLatch(usedBENodes.size() * numThreadsPerBENode);
-					}
+					CountDownLatch countDownLatch = new CountDownLatch(usedBENodes.size());
+
 					// # of items to be processed by current node  
 					int itemsProcessed = 0;
 					
@@ -363,8 +282,9 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 							jobSize = password.size() - itemsProcessed;
 						}
 
+						node.setHashPassLatch(countDownLatch);
 						try {
-							node.hashPassword(password.subList(itemsProcessed, (itemsProcessed + jobSize)), logRounds, countDownLatch);
+							node.hashPassword(password.subList(itemsProcessed, (itemsProcessed + jobSize)), logRounds);
 						} catch (Exception e) {
 							System.out.println("Error as backend node tried to hash password.");
 							System.out.println(e.getMessage());
@@ -483,11 +403,21 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 					if (nodesForUse.size() > 0) {
 						int jobSize = password.size() / nodesForUse.size();
 
-						if (jobSize < 1) {
-							usedBENodes.add(nodesForUse.get(0));
-						} else {
+						if (jobSize >= 1) {
 							usedBENodes = nodesForUse;
+						} else {
+							int nodesToAssign = password.size();
+							System.out.println("CP - Nodes to Assign: " + nodesToAssign + ", passwords: " + password.size() + ", nodesForUse: " + nodesForUse.size());
+							for (int i = 0; i < nodesToAssign; i++) {
+								usedBENodes.add(nodesForUse.get(i));
+							}
 						}
+
+						//if (jobSize < 1) {
+						//	usedBENodes.add(nodesForUse.get(0));
+						//} else {
+						//	usedBENodes = nodesForUse;
+						//}
 
 						for (int i = 0; i < usedBENodes.size(); i++) {
 							usedBENodes.get(i).startedWorking();
@@ -498,14 +428,8 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 				// if found one or more free backend nodes, split work evenly between them
 				if (usedBENodes.size() > 0) {
 					int jobSize = password.size() / usedBENodes.size();
-					int threadJobSize = password.size() / (usedBENodes.size() * numThreadsPerBENode);
 
-					CountDownLatch countDownLatch;
-					if (threadJobSize < 1) {
-						countDownLatch = new CountDownLatch(usedBENodes.size());
-					} else {
-						countDownLatch = new CountDownLatch(usedBENodes.size() * numThreadsPerBENode);
-					}
+					CountDownLatch countDownLatch = new CountDownLatch(usedBENodes.size());
 
 					// # of items to be processed by current node 
 
@@ -517,8 +441,9 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 							jobSize = password.size() - itemsProcessed;
 						}
 
+						node.setCheckPassLatch(countDownLatch);
 						try {
-							node.checkPassword(password.subList(itemsProcessed, (itemsProcessed + jobSize)), hash.subList(itemsProcessed, (itemsProcessed + jobSize)), countDownLatch);
+							node.checkPassword(password.subList(itemsProcessed, (itemsProcessed + jobSize)), hash.subList(itemsProcessed, (itemsProcessed + jobSize)));
 						} catch (Exception e) {
 							System.out.println("Error as backend node tried to check password.");
 							System.out.println(e.getMessage());
