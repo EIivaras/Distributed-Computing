@@ -251,6 +251,7 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 								usedBENodes.add(nodesForUse.get(i));
 							}
 						}
+						
 						for (int i = 0; i < usedBENodes.size(); i++) {
 							usedBENodes.get(i).startedWorking();
 						}
@@ -322,12 +323,12 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 				} else {
 					// If no free BEs, do the work yourself
 
-					//System.out.println("No free BEs, doing hashPassword work at frontend.");
+					System.out.println("No free BEs, doing hashPassword work at frontend.");
 
 					for (int i = 0; i < password.size(); i++) {
 						result.add(BCrypt.hashpw(password.get(i), BCrypt.gensalt(logRounds)));
 					}
-					//System.out.println("Finished hashPassword work at frontend.");
+					System.out.println("Finished hashPassword work at frontend.");
 				}
 			} catch (Exception e) {
 				System.out.println("Error in frontend hashPassword method:");
@@ -456,7 +457,7 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 				} else {
 					// If no free BEs, do the work yourself
 
-					//System.out.println("No free BEs, doing checkPassword work at frontend.");
+					System.out.println("No free BEs, doing checkPassword work at frontend.");
 					for (int i = 0; i < password.size(); i++) {
 						String passwordString = password.get(i);
 						String hashString = hash.get(i);
@@ -468,7 +469,7 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 		
 						result.add(BCrypt.checkpw(passwordString, hashString));
 					}
-					//System.out.println("Finished checkPassword work at frontend.");
+					System.out.println("Finished checkPassword work at frontend.");
 				}
 			} catch (Exception e) {
 				System.out.println("Error in frontend checkPassword method:");

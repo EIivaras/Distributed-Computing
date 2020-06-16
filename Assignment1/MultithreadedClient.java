@@ -13,6 +13,8 @@ public class MultithreadedClient extends Thread {
     int threadNumber;
     List<String> passwords;
     short logRounds;
+    TTransport transport;
+    BcryptService.Client client;
 
     public MultithreadedClient(String host, int port, int threadNumber, List<String> passwords, short logRounds) {
         this.host = host;
@@ -20,6 +22,20 @@ public class MultithreadedClient extends Thread {
         this.threadNumber = threadNumber;
         this.passwords = passwords;
         this.logRounds = logRounds;
+
+        try {
+            TSocket sock = new TSocket(this.host, this.port);
+            TTransport transport = new TFramedTransport(sock);
+            TProtocol protocol = new TBinaryProtocol(transport);
+            BcryptService.Client client = new BcryptService.Client(protocol);
+
+            this.transport = transport;
+            this.client = client;
+            transport.open();
+        } catch (Exception e) {
+            System.out.println("Exception in thread " + this.threadNumber + ":");
+            System.out.println(e.getMessage());
+        }
     }
 
     public void run() {
@@ -29,21 +45,15 @@ public class MultithreadedClient extends Thread {
 
             System.out.println("\nThread " + this.threadNumber + " starting.");
 
-            TSocket sock = new TSocket(this.host, this.port);
-            TTransport transport = new TFramedTransport(sock);
-            TProtocol protocol = new TBinaryProtocol(transport);
-            BcryptService.Client client = new BcryptService.Client(protocol);
-            transport.open();
-    
             try {
                 startTime = System.currentTimeMillis();
-                List<String> hashes = client.hashPassword(this.passwords, this.logRounds);
+                List<String> hashes = this.client.hashPassword(this.passwords, this.logRounds);
                 endTime = System.currentTimeMillis();
     
                 System.out.println("Latency for logRounds=" + this.logRounds + " on thread " + this.threadNumber + " for hashPassword: " + (endTime-startTime)/this.passwords.size());
 
                 startTime = System.currentTimeMillis();
-                List<Boolean> result = client.checkPassword(passwords, hashes);
+                List<Boolean> result = this.client.checkPassword(passwords, hashes);
                 endTime = System.currentTimeMillis();
 
                 System.out.println("Latency for logRounds=" + this.logRounds + " on thread " + this.threadNumber + " for checkPassword: " + (endTime-startTime)/this.passwords.size());
@@ -65,6 +75,7 @@ public class MultithreadedClient extends Thread {
         } catch (Exception e) {
             System.out.println("Exception in thread " + this.threadNumber + ":");
             System.out.println(e.getMessage());
+            transport.close();
         }
     }
     
