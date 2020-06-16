@@ -284,8 +284,7 @@ public class Client {
 
 		endTime = System.currentTimeMillis();
 
-		System.out.println("Throughput for logRounds=" + 10 + ": " + 32 * 1000f/(endTime-startTime));
-	    System.out.println("Latency for logRounds=" + 10 + ": " + (endTime-startTime)/32);
+		System.out.println("Throughput for logRounds=" + 10 + ": " + (passwords.size()*2) * 1000f/(endTime-startTime));
 
 		System.out.println("\n Test case 2: 16 Clients with 1 Password per request");
 
@@ -314,9 +313,7 @@ public class Client {
 
 		endTime = System.currentTimeMillis();
 
-		System.out.println("Throughput for logRounds=" + 10 + ": " + 32 * 1000f/(endTime-startTime));
-	    System.out.println("Latency for logRounds=" + 10 + ": " + (endTime-startTime)/32);
-
+		System.out.println("Throughput for logRounds=" + 10 + ": " + (passwords.size()*2) * 1000f/(endTime-startTime));
 
 		System.out.println("\n Test case 3: 1 Clients with 16 Passwords per request");
 
@@ -360,9 +357,7 @@ public class Client {
 
 		endTime = System.currentTimeMillis();
 		
-		System.out.println("Throughput for logRounds=" + 10 + ": " + 32 * 1000f/(endTime-startTime));
-	    System.out.println("Latency for logRounds=" + 10 + ": " + (endTime-startTime)/32);
-
+		System.out.println("Throughput for logRounds=" + 10 + ": " + (passwords.size()*2) * 1000f/(endTime-startTime));
 
 	} catch (TException x) {
 	    x.printStackTrace();

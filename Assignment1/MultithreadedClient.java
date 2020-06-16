@@ -24,6 +24,9 @@ public class MultithreadedClient extends Thread {
 
     public void run() {
         try {
+            long startTime;
+            long endTime;
+
             System.out.println("\nThread " + this.threadNumber + " starting.");
 
             TSocket sock = new TSocket(this.host, this.port);
@@ -31,12 +34,20 @@ public class MultithreadedClient extends Thread {
             TProtocol protocol = new TBinaryProtocol(transport);
             BcryptService.Client client = new BcryptService.Client(protocol);
             transport.open();
-
-            List<String> hashes = client.hashPassword(this.passwords, this.logRounds);
     
             try {
-                List<Boolean> result = client.checkPassword(passwords, hashes);
+                startTime = System.currentTimeMillis();
+                List<String> hashes = client.hashPassword(this.passwords, this.logRounds);
+                endTime = System.currentTimeMillis();
     
+                System.out.println("Latency for logRounds=" + this.logRounds + " on thread " + this.threadNumber + " for hashPassword: " + (endTime-startTime)/this.passwords.size());
+
+                startTime = System.currentTimeMillis();
+                List<Boolean> result = client.checkPassword(passwords, hashes);
+                endTime = System.currentTimeMillis();
+
+                System.out.println("Latency for logRounds=" + this.logRounds + " on thread " + this.threadNumber + " for checkPassword: " + (endTime-startTime)/this.passwords.size());
+
                 for (int i = 0; i < result.size(); i++) {
                     if (!result.get(i)) {
                         System.out.println("Thread " + this.threadNumber + " failure because of password and hash mismatch.");

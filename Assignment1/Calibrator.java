@@ -14,7 +14,7 @@ public class Calibrator {
 	    rand.nextBytes(bytes);
 	    String password = new String(bytes);
 	    long startTime = System.currentTimeMillis();
-	    int n = 4096/numRounds;
+		int n = 4096/numRounds;
 	    for (int i = 0; i < n; i++) {
 		String hashed = BCrypt.hashpw(password, BCrypt.gensalt(s));
 	    }
