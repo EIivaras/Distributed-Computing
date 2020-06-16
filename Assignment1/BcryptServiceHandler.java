@@ -242,11 +242,22 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 						// TODO: If we have 4 backend nodes and we get a request of 4 passwords, we probably shouldn't split between the 4 nodes
 							// Look into adjusting this. Perhaps <= ?
 						// TODO: But then what about 5? Do we split that? Or 6? Etc?
-						if (jobSize < 1) {
-							usedBENodes.add(nodesForUse.get(0));
-						} else {
+
+						if (jobSize >= 1) {
 							usedBENodes = nodesForUse;
+						} else {
+							int nodesToAssign = password.size();
+							System.out.println("HP - Nodes to Assign: " + nodesToAssign + ", passwords: " + password.size() + ", nodesForUse: " + nodesForUse.size());
+							for (int i = 0; i < nodesToAssign; i++) {
+								usedBENodes.add(nodesForUse.get(i));
+							}
 						}
+
+						//if (jobSize < 1) {
+						//	usedBENodes.add(nodesForUse.get(0));
+						//} else {
+						//	usedBENodes = nodesForUse;
+						//}
 
 						for (int i = 0; i < usedBENodes.size(); i++) {
 							usedBENodes.get(i).startedWorking();
@@ -374,11 +385,21 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 					if (nodesForUse.size() > 0) {
 						int jobSize = password.size() / nodesForUse.size();
 
-						if (jobSize < 1) {
-							usedBENodes.add(nodesForUse.get(0));
-						} else {
+						if (jobSize >= 1) {
 							usedBENodes = nodesForUse;
+						} else {
+							int nodesToAssign = password.size();
+							System.out.println("CP - Nodes to Assign: " + nodesToAssign + ", passwords: " + password.size() + ", nodesForUse: " + nodesForUse.size());
+							for (int i = 0; i < nodesToAssign; i++) {
+								usedBENodes.add(nodesForUse.get(i));
+							}
 						}
+
+						//if (jobSize < 1) {
+						//	usedBENodes.add(nodesForUse.get(0));
+						//} else {
+						//	usedBENodes = nodesForUse;
+						//}
 
 						for (int i = 0; i < usedBENodes.size(); i++) {
 							usedBENodes.get(i).startedWorking();
@@ -462,7 +483,7 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 		
 						result.add(BCrypt.checkpw(passwordString, hashString));
 					}
-					System.out.println("Frinished checkPassword work at frontend.");
+					System.out.println("Finished checkPassword work at frontend.");
 				}
 			} catch (Exception e) {
 				System.out.println("Error in frontend checkPassword method:");
