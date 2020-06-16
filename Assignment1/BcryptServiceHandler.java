@@ -15,7 +15,7 @@ import org.apache.thrift.transport.TTransport;
 
 public class BcryptServiceHandler implements BcryptService.Iface {
 
-	private int numThreadsPerBENode = 3;
+	private int numThreadsPerBENode = 2;
 
 	private List<BackendNode> backendNodes = Collections.synchronizedList(new ArrayList<BackendNode>()); /* backend nodes that are up & running */
 
@@ -26,7 +26,7 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 		public boolean hadError = false;
 
 		public void onComplete(List<String> response) {
-			System.out.println("Completed hashPassword at backend.");
+			//System.out.println("Completed hashPassword at backend.");
 			this.resultList = response;
 			this.hadError = false;
 			
@@ -47,7 +47,7 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 		public boolean hadError = false;
 
 		public void onComplete (List<Boolean> response) {
-			System.out.println("Completed checkPassword at backend.");
+			//System.out.println("Completed checkPassword at backend.");
 			resultList = response;
 			this.hadError = false;
 
@@ -104,7 +104,7 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 		}
 
 		public void hashPassword(List<String> password, short logRounds, CountDownLatch countDownLatch) throws IllegalArgument, org.apache.thrift.TException {
-			System.out.println("Starting hashPassword at backend.");
+			//System.out.println("Starting hashPassword at backend.");
 
 			int threadJobSize = password.size() / numThreadsPerBENode;
 			this.bcryptClientsInUse = new ArrayList<BcryptService.AsyncClient>();
@@ -140,7 +140,7 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 		}
 
 		public void checkPassword(List<String> password, List<String> hash, CountDownLatch countDownLatch) throws IllegalArgument, org.apache.thrift.TException {
-			System.out.println("Starting checkPassword at backend.");
+			//System.out.println("Starting checkPassword at backend.");
 
 			int threadJobSize = password.size() / numThreadsPerBENode;
 			this.bcryptClientsInUse = new ArrayList<BcryptService.AsyncClient>();
@@ -189,9 +189,19 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 
 		public List<String> getHashPassResults() {
 			List<String> results = new ArrayList<String>();
-			for (int i = 0; i < this.bcryptClientsInUse.size(); i++) {
-				results.addAll(this.hashPassCallbackList.get(i).resultList);
+
+			try {
+				System.out.println("clientsInUse: " + this.bcryptClientsInUse);
+				System.out.println("hashPassListSize: " + this.hashPassCallbackList.size());
+
+				for (int i = 0; i < this.bcryptClientsInUse.size(); i++) {
+					results.addAll(this.hashPassCallbackList.get(i).resultList);
+				}
+			} catch (Exception e) {
+				System.out.println("Exception in getHashPassResults:");
+				System.out.println(e.getMessage());
 			}
+
 			return results;
 		}
 
@@ -331,6 +341,7 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 					}
 				}
 
+
 				// if found one or more free backend nodes, split work evenly between them
 				if (usedBENodes.size() > 0) {
 					int jobSize = password.size() / usedBENodes.size();
@@ -373,18 +384,35 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 					List<Integer> jobEndIndexes = new ArrayList<Integer>();
 
 					int index = 0;
-					for (BackendNode node : usedBENodes) {
-						if (node.checkHashPassErrors().equals(true)) {
-							node.bcryptClientInError();
-							resultIndexesInError.add(index);
-							jobStartIndexes.add(node.jobStartIndex);
-							jobEndIndexes.add(node.jobEndIndex);
 
-						} else {
-							resultLists.add(index, node.getHashPassResults());
-							node.finishedWorking();
+
+					try {
+						for (BackendNode node : usedBENodes) {
+							if (node.checkHashPassErrors().equals(true)) {
+								node.bcryptClientInError();
+								resultIndexesInError.add(index);
+								jobStartIndexes.add(node.jobStartIndex);
+								jobEndIndexes.add(node.jobEndIndex);
+							} else {
+								try {
+									node.finishedWorking();
+								} catch (Exception e) {
+									System.out.println("Exception 2: ");
+									System.out.println(e.getMessage());
+								}
+								try {
+									resultLists.add(index, node.getHashPassResults());
+								} catch (Exception e) {
+									System.out.println("Exception 3: ");
+									System.out.println(e.getMessage());
+								}
+
+							}
+							index++;
 						}
-						index++;
+					} catch (Exception e) {
+						System.out.println("Exception: ");
+						System.out.println(e.getMessage());
 					}
 
 					for (int i = 0; i < resultIndexesInError.size(); i++) {
@@ -548,7 +576,7 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 		
 						result.add(BCrypt.checkpw(passwordString, hashString));
 					}
-					System.out.println("Frinished checkPassword work at frontend.");
+					System.out.println("Finished checkPassword work at frontend.");
 				}
 			} catch (Exception e) {
 				System.out.println("Error in frontend checkPassword method:");
