@@ -11,11 +11,15 @@ public class MultithreadedClient extends Thread {
     String host;
     int port;
     int threadNumber;
+    List<String> passwords;
+    short logRounds;
 
-    public MultithreadedClient(String host, int port, int threadNumber) {
+    public MultithreadedClient(String host, int port, int threadNumber, List<String> passwords, short logRounds) {
         this.host = host;
         this.port = port;
         this.threadNumber = threadNumber;
+        this.passwords = passwords;
+        this.logRounds = logRounds;
     }
 
     public void run() {
@@ -28,13 +32,7 @@ public class MultithreadedClient extends Thread {
             BcryptService.Client client = new BcryptService.Client(protocol);
             transport.open();
 
-
-            List<String> passwords = new ArrayList<String>();
-            passwords.add("Hype");
-            passwords.add("Hype2");
-            passwords.add("Hype3");
-            passwords.add("Hype4");
-            List<String> hashes = client.hashPassword(passwords, (short)10);
+            List<String> hashes = client.hashPassword(this.passwords, this.logRounds);
     
             try {
                 List<Boolean> result = client.checkPassword(passwords, hashes);

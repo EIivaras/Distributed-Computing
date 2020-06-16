@@ -24,13 +24,11 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 		public CountDownLatch countDownLatch = null;
 		public List<String> resultList;
 		public boolean hadError = false;
-		public boolean isWorking = false;
 
 		public void onComplete(List<String> response) {
 			System.out.println("Completed hashPassword at backend.");
 			this.resultList = response;
 			this.hadError = false;
-			this.isWorking = false;
 			
 			countDownLatch.countDown();
 		}
@@ -38,7 +36,6 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 			System.out.println("Callback onError method called for HashPassCallback. Exception:");
 			System.out.println(e.getMessage());
 			this.hadError = true;
-			this.isWorking = false;
 			countDownLatch.countDown();
 		}
 	}
@@ -48,13 +45,11 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 		public CountDownLatch countDownLatch = null;
 		public List<Boolean> resultList;
 		public boolean hadError = false;
-		public boolean isWorking = false;
 
 		public void onComplete (List<Boolean> response) {
 			System.out.println("Completed checkPassword at backend.");
 			resultList = response;
 			this.hadError = false;
-			this.isWorking = false;
 
 			countDownLatch.countDown();
 		}
@@ -63,7 +58,6 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 			System.out.println("Callback onError method called for CheckPassCallback. Exception:");
 			System.out.println(e.getMessage());
 			this.hadError = true;
-			this.isWorking = false;
 			countDownLatch.countDown();
 		}
 	}
@@ -76,6 +70,7 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 		public List<BcryptService.AsyncClient> bcryptClientsInUse;
 		public Boolean bcryptClientActive;
 		public Boolean inError;
+		public Boolean isWorking;
 		public List<HashPassCallback> hashPassCallbackList;
 		public List<CheckPassCallback> checkPassCallbackList;
 
@@ -91,6 +86,7 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 			this.bcryptClientsInUse = new ArrayList<BcryptService.AsyncClient>();
 			this.bcryptClientActive = false;
 			this.inError = false;
+			this.isWorking = false;
 			this.jobStartIndex = 0;
 			this.jobEndIndex = 0;
 			this.hashPassCallbackList = new ArrayList<HashPassCallback>();
@@ -179,30 +175,6 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 			}
 		}
 
-		public void setHashPasswordInProgress(int numPasswords, int numNodesBeingUsed) {
-			int threadJobSize = numPasswords / (numNodesBeingUsed * numThreadsPerBENode);
-
-			if (threadJobSize < 1) {
-				this.hashPassCallbackList.get(0).isWorking = true;
-			} else {
-				for (int i = 0; i < bcryptClientList.size(); i++) {
-					this.hashPassCallbackList.get(i).isWorking = true;;
-				}
-			}
-		}
-
-		public void setCheckPasswordInProgress(int numPasswords, int numNodesBeingUsed) {
-			int threadJobSize = numPasswords / (numNodesBeingUsed * numThreadsPerBENode);
-
-			if (threadJobSize < 1) {
-				this.checkPassCallbackList.get(0).isWorking = true;
-			} else {
-				for (int i = 0; i < bcryptClientList.size(); i++) {
-					this.checkPassCallbackList.get(i).isWorking = true;;
-				}
-			}		
-		}
-
 		public boolean isBcryptClientActive() {
 			return this.bcryptClientActive;
 		}
@@ -250,12 +222,15 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 		}
 
 		public boolean isWorking() {
-			for (int i = 0; i < this.bcryptClientsInUse.size(); i++) {
-				if (this.hashPassCallbackList.get(i).isWorking || this.checkPassCallbackList.get(i).isWorking) {
-					return true;
-				}
-			}
-			return false;
+			return this.isWorking;
+		}
+
+		public void startedWorking() {
+			this.isWorking = true;
+		}
+
+		public void finishedWorking() {
+			this.isWorking = false;
 		}
 	}
 	
@@ -320,7 +295,6 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 
 				// Initialize Backend Nodes if not already initialized, and remove any who are disconnected or fail to initialize
 
-				System.out.println("Initialized clients.");
 				synchronized (backendNodes) {
 					for (int i = 0; i < backendNodes.size(); i++) {
 						initializeBcryptClient(backendNodes.get(i));
@@ -333,19 +307,18 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 		
 					// Find indices of free (idle) backend nodes
 
-					System.out.println("Checking if working.");
-
 					for (int i = 0; i < backendNodes.size(); i++) {
 						if (!backendNodes.get(i).isWorking()) {
 							nodesForUse.add(backendNodes.get(i));
 						}
 					}
 
-					System.out.println("Checking nodesForUse sizes.");
-
 					if (nodesForUse.size() > 0) {
 						int jobSize = password.size() / nodesForUse.size();
 
+						// TODO: If we have 4 backend nodes and we get a request of 4 passwords, we probably shouldn't split between the 4 nodes
+							// Look into adjusting this. Perhaps <= ?
+						// TODO: But then what about 5? Do we split that? Or 6? Etc?
 						if (jobSize < 1) {
 							usedBENodes.add(nodesForUse.get(0));
 						} else {
@@ -353,12 +326,10 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 						}
 
 						for (int i = 0; i < usedBENodes.size(); i++) {
-							usedBENodes.get(i).setHashPasswordInProgress(password.size(), nodesForUse.size());
+							usedBENodes.get(i).startedWorking();
 						}
 					}
 				}
-
-				System.out.println("Continuing on.");
 
 				// if found one or more free backend nodes, split work evenly between them
 				if (usedBENodes.size() > 0) {
@@ -411,6 +382,7 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 
 						} else {
 							resultLists.add(index, node.getHashPassResults());
+							node.finishedWorking();
 						}
 						index++;
 					}
@@ -490,7 +462,7 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 						}
 
 						for (int i = 0; i < usedBENodes.size(); i++) {
-							usedBENodes.get(i).setCheckPasswordInProgress(password.size(), nodesForUse.size());
+							usedBENodes.get(i).startedWorking();
 						}
 					}
 				}
@@ -547,6 +519,7 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 
 						} else {
 							resultLists.add(index, node.getCheckPassResults());
+							node.finishedWorking();
 						}
 						index++;
 					}

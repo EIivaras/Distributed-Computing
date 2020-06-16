@@ -49,16 +49,21 @@ public class Client {
 		
 		// ~~~~~~~~~~~~ Added Test Cases ~~~~~~~~~~~~ //
 
+		List<String> passwords = new ArrayList<String>();
+		List<String> hashes = new ArrayList<String>();
+
+		// /*
+
 		System.out.println("\n\n~~~~~~~~~~~~~~~~~ Test Cases to test Correctness ~~~~~~~~~~~~~~~~~\n\n");
 
 		// Test Case 1: Multiple Passwords
 		System.out.println("\nTest case 1: Multiple Passwords");
 
-		List<String> passwords = new ArrayList<String>();
+		passwords = new ArrayList<String>();
 		passwords.add("Hype");
 		passwords.add("Hype2");
 		passwords.add("Hype3");
-		List<String> hashes = client.hashPassword(passwords, (short)10);
+		hashes = client.hashPassword(passwords, (short)10);
 
 		try {
 			List<Boolean> result = client.checkPassword(passwords, hashes);
@@ -237,18 +242,32 @@ public class Client {
 			System.out.println(e.getMessage());
 			System.out.println("\n");
 		}
+		
 
 		transport.close();
+
+		// */
 		
-		System.out.println("\n\n~~~~~~~~~~~~~~~~~ Multi-threaded Test Cases ~~~~~~~~~~~~~~~~~\n\n");
+		System.out.println("\n\n~~~~~~~~~~~~~~~~~ Throughput Test Cases ~~~~~~~~~~~~~~~~~\n\n");
+
+		long startTime;
+		long endTime;
 
 		System.out.println("\n Test case 1: 4 Clients with 4 Passwords each");
+
+		passwords = new ArrayList<String>();
+		passwords.add("Hype");
+		passwords.add("Hype2");
+		passwords.add("Hype3");
+		passwords.add("Hype4");
 
 		List<MultithreadedClient> multithreadedClients = new ArrayList<MultithreadedClient>();
 
 		for (int i = 0; i < 4; i++) {
-			multithreadedClients.add(new MultithreadedClient(args[0], Integer.parseInt(args[1]), i));
+			multithreadedClients.add(new MultithreadedClient(args[0], Integer.parseInt(args[1]), i, passwords, (short) 10));
 		}
+
+		startTime = System.currentTimeMillis();
 
 		for (int i = 0; i < 4; i++) {
 			multithreadedClients.get(i).start();
@@ -256,12 +275,94 @@ public class Client {
 
 		for (int i = 0; i < 4; i++) {
 			try {
-				multithreadedClients.get(i).join();;
+				multithreadedClients.get(i).join();
 			} catch (Exception e) {
 				System.out.println("Thread interrupted during execution. Exception:");
 				System.out.println(e.getMessage());
 			}
 		}
+
+		endTime = System.currentTimeMillis();
+
+		System.out.println("Throughput for logRounds=" + 10 + ": " + 32 * 1000f/(endTime-startTime));
+	    System.out.println("Latency for logRounds=" + 10 + ": " + (endTime-startTime)/32);
+
+		System.out.println("\n Test case 2: 16 Clients with 1 Password per request");
+
+		passwords = new ArrayList<String>();
+		passwords.add("Hype");
+
+		multithreadedClients = new ArrayList<MultithreadedClient>();
+		for (int i = 0; i < 16; i++) {
+			multithreadedClients.add(new MultithreadedClient(args[0], Integer.parseInt(args[1]), i, passwords, (short) 10));
+		}
+
+		startTime = System.currentTimeMillis();
+
+		for (int i = 0; i < 16; i++) {
+			multithreadedClients.get(i).start();
+		}
+
+		for (int i = 0; i < 16; i++) {
+			try {
+				multithreadedClients.get(i).join();
+			} catch (Exception e) {
+				System.out.println("Thread interrupted during execution. Exception:");
+				System.out.println(e.getMessage());
+			}
+		}
+
+		endTime = System.currentTimeMillis();
+
+		System.out.println("Throughput for logRounds=" + 10 + ": " + 32 * 1000f/(endTime-startTime));
+	    System.out.println("Latency for logRounds=" + 10 + ": " + (endTime-startTime)/32);
+
+
+		System.out.println("\n Test case 3: 1 Clients with 16 Passwords per request");
+
+		passwords = new ArrayList<String>();
+		passwords.add("Hype");
+		passwords.add("Hype2");
+		passwords.add("Hype3");
+		passwords.add("Hype4");
+		passwords.add("Hype5");
+		passwords.add("Hype6");
+		passwords.add("Hype7");
+		passwords.add("Hype8");
+		passwords.add("Hype9");
+		passwords.add("Hype10");
+		passwords.add("Hype11");
+		passwords.add("Hype12");
+		passwords.add("Hype13");
+		passwords.add("Hype14");
+		passwords.add("Hype15");
+		passwords.add("Hype16");
+
+		multithreadedClients = new ArrayList<MultithreadedClient>();
+		for (int i = 0; i < 1; i++) {
+			multithreadedClients.add(new MultithreadedClient(args[0], Integer.parseInt(args[1]), i, passwords, (short) 10));
+		}
+
+		startTime = System.currentTimeMillis();
+
+		for (int i = 0; i < 1; i++) {
+			multithreadedClients.get(i).start();
+		}
+
+		for (int i = 0; i < 1; i++) {
+			try {
+				multithreadedClients.get(i).join();
+			} catch (Exception e) {
+				System.out.println("Thread interrupted during execution. Exception:");
+				System.out.println(e.getMessage());
+			}
+		}
+
+		endTime = System.currentTimeMillis();
+		
+		System.out.println("Throughput for logRounds=" + 10 + ": " + 32 * 1000f/(endTime-startTime));
+	    System.out.println("Latency for logRounds=" + 10 + ": " + (endTime-startTime)/32);
+
 
 	} catch (TException x) {
 	    x.printStackTrace();
