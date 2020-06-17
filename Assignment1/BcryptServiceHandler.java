@@ -288,18 +288,20 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 							List<String> offloadFEResult = new ArrayList<>();
 							if (jobSize == 0){
 								break;
-							} else if (jobSize == 1) {
+							} else if (jobSize <= 2) {
 								// TODO: experiment with larger min job sizes for FENode
 								// last job is tiny, FENode can handle it
-								for (int i = itemsProcessed; i < password.size(); i++) {
+								for (int i = itemsProcessed; i < password.size(); ++i) {
 									offloadFEResult.add(BCrypt.hashpw(password.get(i), BCrypt.gensalt(logRounds)));
 								}
 								resultLists.get(nodeNum).addAll(offloadFEResult);
+								usedBENodes.remove(node);
+								countDownLatch.countDown();
 								break;
 							} else {
 								// split the last job between the FENode and last usedBENode
 								jobSize /= 2;
-								for (int i = itemsProcessed + jobSize; i < password.size(); i++) {
+								for (int i = itemsProcessed + jobSize; i < password.size(); ++i) {
 									offloadFEResult.add(BCrypt.hashpw(password.get(i), BCrypt.gensalt(logRounds)));
 								}
 								resultLists.get(nodeNum).addAll(offloadFEResult);
@@ -431,6 +433,7 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 				for (int i = 0; i < usedBENodes.size() + 1; ++i) {
 					resultLists.add(new ArrayList<Boolean>());
 				}
+				System.out.println("Initialized results list");
 				
 				// if found one or more free backend nodes, split work evenly between them
 				if (usedBENodes.size() > 0) {
@@ -451,33 +454,36 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 							List<Boolean> offloadFEResult = new ArrayList<>();
 							if (jobSize == 0){
 								break;
-							} else if (jobSize == 1) {
+							} else if (jobSize <= 2) {
 								// TODO: experiment with larger min job sizes for FENode
 								// last job is tiny, FENode can handle it
-								for (int i = itemsProcessed; i < password.size(); i++) {
+								for (int i = itemsProcessed; i < password.size(); ++i) {
 									String passwordString = password.get(i);
 									String hashString = hash.get(i);
 									if (hashString.charAt(0) != '$' && hashString.charAt(1) != '2') {
 										offloadFEResult.add(false);
-										continue;
+									} else {
+										offloadFEResult.add(BCrypt.checkpw(passwordString, hashString));
 									}
-									offloadFEResult.add(BCrypt.checkpw(passwordString, hashString));
 								}
-								resultLists.get(nodeNum).addAll(nodeNum, offloadFEResult);
+								resultLists.get(nodeNum).addAll(offloadFEResult);
+								usedBENodes.remove(node);
+								countDownLatch.countDown();
+								System.out.println("Done offloading to FE");
 								break;
 							} else {
 								// split the last job between the FENode and last usedBENode
 								jobSize /= 2;
-								for (int i = itemsProcessed + jobSize; i < password.size(); i++) {
+								for (int i = itemsProcessed + jobSize; i < password.size(); ++i) {
 									String passwordString = password.get(i);
 									String hashString = hash.get(i);
 									if (hashString.charAt(0) != '$' && hashString.charAt(1) != '2') {
 										result.add(false);
-										continue;
+									} else {
+										offloadFEResult.add(BCrypt.checkpw(passwordString, hashString));
 									}
-									offloadFEResult.add(BCrypt.checkpw(passwordString, hashString));
 								}
-								resultLists.get(nodeNum).addAll(nodeNum, offloadFEResult);
+								resultLists.get(nodeNum).addAll(offloadFEResult);
 							}
 						}
 
@@ -510,7 +516,7 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 							jobEndIndexes.add(node.jobEndIndex);
 
 						} else {
-							resultLists.get(index).addAll(index, node.getCheckPassResults());
+							resultLists.get(index).addAll(node.getCheckPassResults());
 							node.finishedWorking();
 						}
 						index++;
