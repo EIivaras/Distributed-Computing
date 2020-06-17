@@ -265,6 +265,11 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 					}
 				}	
 
+				List<List<String>> resultLists = new ArrayList<List<String>>(usedBENodes.size() + 1);
+				for (int i = 0; i < usedBENodes.size() + 1; ++i) {
+					resultLists.add(new ArrayList<String>());
+				}
+
 				// if found one or more free backend nodes, split work evenly between them
 				if (usedBENodes.size() > 0) {
 					int jobSize = password.size() / usedBENodes.size();
@@ -277,8 +282,28 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 					int nodeNum = 1;
 					for (BackendNode node : usedBENodes){
 						if (nodeNum == usedBENodes.size()){
-							// handle all remaining items in last job (executed by last freeBE available)
+							// calculate all remaining items in last job 
 							jobSize = password.size() - itemsProcessed;
+							// offload half of last job to FENode (FENode will process the last chunk of passwords)
+							List<String> offloadFEResult = new ArrayList<>();
+							if (jobSize == 0){
+								break;
+							} else if (jobSize == 1) {
+								// TODO: experiment with larger min job sizes for FENode
+								// last job is tiny, FENode can handle it
+								for (int i = itemsProcessed; i < password.size(); i++) {
+									offloadFEResult.add(BCrypt.hashpw(password.get(i), BCrypt.gensalt(logRounds)));
+								}
+								resultLists.get(nodeNum).addAll(offloadFEResult);
+								break;
+							} else {
+								// split the last job between the FENode and last usedBENode
+								jobSize /= 2;
+								for (int i = itemsProcessed + jobSize; i < password.size(); i++) {
+									offloadFEResult.add(BCrypt.hashpw(password.get(i), BCrypt.gensalt(logRounds)));
+								}
+								resultLists.get(nodeNum).addAll(offloadFEResult);
+							}
 						}
 
 						node.setHashPassLatch(countDownLatch);
@@ -297,7 +322,6 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 
 					countDownLatch.await();
 
-					List<List<String>> resultLists = new ArrayList<List<String>>(usedBENodes.size());
 					List<Integer> resultIndexesInError = new ArrayList<Integer>();
 					List<Integer> jobStartIndexes = new ArrayList<Integer>();
 					List<Integer> jobEndIndexes = new ArrayList<Integer>();
@@ -312,7 +336,7 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 							jobEndIndexes.add(node.jobEndIndex);
 						} else {
 							node.finishedWorking();
-							resultLists.add(index, node.getHashPassResults());
+							resultLists.get(index).addAll(node.getHashPassResults());
 						}
 						index++;
 					}
@@ -320,7 +344,7 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 					for (int i = 0; i < resultIndexesInError.size(); i++) {
 						System.out.println("Backend node was in error, recursively calling cP from start index " + jobStartIndexes.get(i) + " to end index " + jobEndIndexes.get(i) + ".");
 						List<String> partialResult = hashPassword(password.subList(jobStartIndexes.get(i), jobEndIndexes.get(i)), logRounds);
-						resultLists.add(resultIndexesInError.get(i), partialResult);	
+						resultLists.get(resultIndexesInError.get(i)).addAll(partialResult);	
 					}
 
 					for (List<String> list : resultLists) {
@@ -402,6 +426,11 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 						}
 					}
 				}
+
+				List<List<Boolean>> resultLists = new ArrayList<List<Boolean>>(usedBENodes.size() + 1);
+				for (int i = 0; i < usedBENodes.size() + 1; ++i) {
+					resultLists.add(new ArrayList<Boolean>());
+				}
 				
 				// if found one or more free backend nodes, split work evenly between them
 				if (usedBENodes.size() > 0) {
@@ -416,7 +445,40 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 					int nodeNum = 1;
 					for (BackendNode node : usedBENodes){
 						if (nodeNum == usedBENodes.size()){
+							// calculate all remaining items in last job 
 							jobSize = password.size() - itemsProcessed;
+							// offload half of last job to FENode (FENode will process the last chunk of passwords)
+							List<Boolean> offloadFEResult = new ArrayList<>();
+							if (jobSize == 0){
+								break;
+							} else if (jobSize == 1) {
+								// TODO: experiment with larger min job sizes for FENode
+								// last job is tiny, FENode can handle it
+								for (int i = itemsProcessed; i < password.size(); i++) {
+									String passwordString = password.get(i);
+									String hashString = hash.get(i);
+									if (hashString.charAt(0) != '$' && hashString.charAt(1) != '2') {
+										offloadFEResult.add(false);
+										continue;
+									}
+									offloadFEResult.add(BCrypt.checkpw(passwordString, hashString));
+								}
+								resultLists.get(nodeNum).addAll(nodeNum, offloadFEResult);
+								break;
+							} else {
+								// split the last job between the FENode and last usedBENode
+								jobSize /= 2;
+								for (int i = itemsProcessed + jobSize; i < password.size(); i++) {
+									String passwordString = password.get(i);
+									String hashString = hash.get(i);
+									if (hashString.charAt(0) != '$' && hashString.charAt(1) != '2') {
+										result.add(false);
+										continue;
+									}
+									offloadFEResult.add(BCrypt.checkpw(passwordString, hashString));
+								}
+								resultLists.get(nodeNum).addAll(nodeNum, offloadFEResult);
+							}
 						}
 
 						node.setCheckPassLatch(countDownLatch);
@@ -435,7 +497,6 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 
 					countDownLatch.await();
 
-					List<List<Boolean>> resultLists = new ArrayList<List<Boolean>>(usedBENodes.size());
 					List<Integer> resultIndexesInError = new ArrayList<Integer>();
 					List<Integer> jobStartIndexes = new ArrayList<Integer>();
 					List<Integer> jobEndIndexes = new ArrayList<Integer>();
@@ -449,7 +510,7 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 							jobEndIndexes.add(node.jobEndIndex);
 
 						} else {
-							resultLists.add(index, node.getCheckPassResults());
+							resultLists.get(index).addAll(index, node.getCheckPassResults());
 							node.finishedWorking();
 						}
 						index++;
@@ -458,7 +519,7 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 					for (int i = 0; i < resultIndexesInError.size(); i++) {
 						System.out.println("Backend node was in error, recursively calling cP from start index " + jobStartIndexes.get(i) + " to end index " + jobEndIndexes.get(i) + ".");
 						List<Boolean> partialResult = checkPassword(password.subList(jobStartIndexes.get(i), jobEndIndexes.get(i)), hash.subList(jobStartIndexes.get(i), jobEndIndexes.get(i)));
-						resultLists.add(resultIndexesInError.get(i), partialResult);	
+						resultLists.get(resultIndexesInError.get(i)).addAll(partialResult);	
 					}
 
 					for (List<Boolean> list : resultLists) {
