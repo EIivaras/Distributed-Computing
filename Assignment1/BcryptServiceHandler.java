@@ -218,7 +218,7 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 				List<BackendNode> nodesForUse = new ArrayList<>();
 				List<BackendNode> usedBENodes = new ArrayList<>();
 				List<BackendNode> removalList = new ArrayList<BackendNode>();
-
+				
 				// Initialize Backend Nodes if not already initialized, and remove any who are disconnected or fail to initialize
 
 				synchronized (backendNodes) {
@@ -246,10 +246,14 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 							// Look into adjusting this. Perhaps <= ?
 						// TODO: But then what about 5? Do we split that? Or 6? Etc?
 
-						if (jobSize >= 1) {
+						if (jobSize >= 2) {
 							usedBENodes = nodesForUse;
 						} else {
-							int nodesToAssign = password.size();
+							// assign 2-password jobs to 'n' nodes, until request (passwords) size is reached 
+							int nodesToAssign = password.size() / 2;
+							if (nodesToAssign == 0) {
+								nodesToAssign = 1;
+							}
 							for (int i = 0; i < nodesToAssign; i++) {
 								usedBENodes.add(nodesForUse.get(i));
 							}
@@ -259,8 +263,7 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 							usedBENodes.get(i).startedWorking();
 						}
 					}
-				}
-
+				}	
 
 				// if found one or more free backend nodes, split work evenly between them
 				if (usedBENodes.size() > 0) {
@@ -381,10 +384,14 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 					if (nodesForUse.size() > 0) {
 						int jobSize = password.size() / nodesForUse.size();
 
-						if (jobSize >= 1) {
+						if (jobSize >= 2) {
 							usedBENodes = nodesForUse;
 						} else {
-							int nodesToAssign = password.size();
+							// assign 2-password jobs to 'n' nodes, until request (passwords) size is reached 
+							int nodesToAssign = password.size() / 2;
+							if (nodesToAssign == 0) {
+								nodesToAssign = 1;
+							}
 							for (int i = 0; i < nodesToAssign; i++) {
 								usedBENodes.add(nodesForUse.get(i));
 							}
