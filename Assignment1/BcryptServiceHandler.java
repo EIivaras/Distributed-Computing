@@ -242,10 +242,6 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 					if (nodesForUse.size() > 0) {
 						int jobSize = password.size() / nodesForUse.size();
 
-						// TODO: If we have 4 backend nodes and we get a request of 4 passwords, we probably shouldn't split between the 4 nodes
-							// Look into adjusting this. Perhaps <= ?
-						// TODO: But then what about 5? Do we split that? Or 6? Etc?
-
 						if (jobSize >= 2) {
 							usedBENodes = nodesForUse;
 						} else {
@@ -298,6 +294,9 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 					countDownLatch.await();
 
 					List<List<String>> resultLists = new ArrayList<List<String>>(usedBENodes.size());
+					for (int i = 0; i < usedBENodes.size(); ++i) {
+						resultLists.add(new ArrayList<String>());
+					}	
 					List<Integer> resultIndexesInError = new ArrayList<Integer>();
 					List<Integer> jobStartIndexes = new ArrayList<Integer>();
 					List<Integer> jobEndIndexes = new ArrayList<Integer>();
@@ -306,15 +305,20 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 
 					for (BackendNode node : usedBENodes) {
 						if (node.checkHashPassErrors().equals(true)) {
-							node.bcryptClientInError();
 							resultIndexesInError.add(index);
 							jobStartIndexes.add(node.jobStartIndex);
 							jobEndIndexes.add(node.jobEndIndex);
 						} else {
 							node.finishedWorking();
-							resultLists.add(index, node.getHashPassResults());
+							resultLists.set(index, node.getHashPassResults());
 						}
 						index++;
+					}
+
+					for (BackendNode node : usedBENodes) {
+						if (node.checkHashPassErrors().equals(true)) {
+							node.bcryptClientInError();
+						}
 					}
 
 					for (int i = 0; i < resultIndexesInError.size(); i++) {
@@ -436,6 +440,9 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 					countDownLatch.await();
 
 					List<List<Boolean>> resultLists = new ArrayList<List<Boolean>>(usedBENodes.size());
+					for (int i = 0; i < usedBENodes.size(); ++i) {
+						resultLists.add(new ArrayList<Boolean>());
+					}					
 					List<Integer> resultIndexesInError = new ArrayList<Integer>();
 					List<Integer> jobStartIndexes = new ArrayList<Integer>();
 					List<Integer> jobEndIndexes = new ArrayList<Integer>();
@@ -443,16 +450,21 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 					int index = 0;
 					for (BackendNode node : usedBENodes) {
 						if (node.checkCheckPassErrors().equals(true)) {
-							node.bcryptClientInError();
 							resultIndexesInError.add(index);
 							jobStartIndexes.add(node.jobStartIndex);
 							jobEndIndexes.add(node.jobEndIndex);
 
 						} else {
-							resultLists.add(index, node.getCheckPassResults());
+							resultLists.set(index, node.getCheckPassResults());
 							node.finishedWorking();
 						}
 						index++;
+					}
+
+					for (BackendNode node : usedBENodes) {
+						if (node.checkCheckPassErrors().equals(true)) {
+							node.bcryptClientInError();
+						}
 					}
 
 					for (int i = 0; i < resultIndexesInError.size(); i++) {
