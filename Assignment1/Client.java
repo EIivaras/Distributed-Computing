@@ -1,5 +1,6 @@
 import java.util.List;
 import java.util.ArrayList;
+import java.util.Collections;
 
 import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TProtocol;
@@ -252,6 +253,40 @@ public class Client {
 		long startTime;
 		long endTime;
 
+		System.out.println("\n Test case 0: 2 Clients with 128 (1024 characters long) Passwords each");
+
+		passwords = new ArrayList<String>();
+		for (int i = 0; i < 128; ++i) {
+			String pattern = "abc" + i;
+			List<String> repeated = Collections.nCopies(256, pattern);
+			passwords.add(String.join("", repeated));
+		}
+
+		List<MultithreadedClient> multithreadedClients = new ArrayList<MultithreadedClient>();
+
+		for (int i = 0; i < 2; i++) {
+			multithreadedClients.add(new MultithreadedClient(args[0], Integer.parseInt(args[1]), i, passwords, (short) 10));
+		}
+
+		startTime = System.currentTimeMillis();
+		for (int i = 0; i < 2; i++) {
+			multithreadedClients.get(i).start();
+		}
+
+		for (int i = 0; i < 2; i++) {
+			try {
+				multithreadedClients.get(i).join();
+			} catch (Exception e) {
+				System.out.println("Thread interrupted during execution. Exception:");
+				System.out.println(e.getMessage());
+			}
+		}
+
+		endTime = System.currentTimeMillis();
+
+		// 512 because 512 total cryptographic operations in this time
+		System.out.println("2 Clients, 128 Passwords: Throughput for logRounds=" + 10 + ": " + 512 * 1000f/(endTime-startTime));
+
 		System.out.println("\n Test case 1: 4 Clients with 4 Passwords each");
 
 		passwords = new ArrayList<String>();
@@ -260,7 +295,7 @@ public class Client {
 		passwords.add("Hype3");
 		passwords.add("Hype4");
 
-		List<MultithreadedClient> multithreadedClients = new ArrayList<MultithreadedClient>();
+		multithreadedClients = new ArrayList<MultithreadedClient>();
 
 		for (int i = 0; i < 4; i++) {
 			multithreadedClients.add(new MultithreadedClient(args[0], Integer.parseInt(args[1]), i, passwords, (short) 10));
@@ -283,7 +318,7 @@ public class Client {
 		endTime = System.currentTimeMillis();
 
 		// 32 because 32 total cryptographic operations in this time
-		System.out.println("Throughput for logRounds=" + 10 + ": " + 32 * 1000f/(endTime-startTime));
+		System.out.println("4 Clients, 4 Passwords: Throughput for logRounds=" + 10 + ": " + 32 * 1000f/(endTime-startTime));
 
 		System.out.println("\n Test case 2: 16 Clients with 1 Password per request");
 
@@ -312,7 +347,7 @@ public class Client {
 		endTime = System.currentTimeMillis();
 
 		// 32 because 32 total cryptographic operations in this time
-		System.out.println("Throughput for logRounds=" + 10 + ": " + 32 * 1000f/(endTime-startTime));
+		System.out.println("16 Clients, 1 Password: Throughput for logRounds=" + 10 + ": " + 32 * 1000f/(endTime-startTime));
 
 		System.out.println("\n Test case 3: 1 Clients with 16 Passwords per request");
 
@@ -356,7 +391,7 @@ public class Client {
 		endTime = System.currentTimeMillis();
 		
 		// 32 because 32 total cryptographic operations in this time
-		System.out.println("Throughput for logRounds=" + 10 + ": " + 32 * 1000f/(endTime-startTime));
+		System.out.println("1 Clients, 16 Passwords: Throughput for logRounds=" + 10 + ": " + 32 * 1000f/(endTime-startTime));
 
 	} catch (TException x) {
 	    x.printStackTrace();
