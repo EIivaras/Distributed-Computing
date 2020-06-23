@@ -186,6 +186,7 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 						backendNodes.add(backendNode);
 				}
 			}
+			System.out.println("Backend node initialized.");
 
 		}
 		catch (Exception e) {

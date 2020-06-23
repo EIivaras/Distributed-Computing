@@ -1,0 +1,81 @@
+It's possible that the last user could have NOT rated a movie, so in that case you'll be left with a trailing comma - make sure you can parse this!
+
+Task 1: 
+-For each movie, output the column numbers of the of users who gave the highest ratings
+-If the highest rating is given by multiple users, output all of them in ascending numerical order
+-Assume that there is at least one non-blank rating for each movie
+
+Task 2:
+-Compute the total number of (non-blank) ratings
+-Output the total as a SINGLE NUMBER on a SINGLE LINE
+
+Task 3:
+-For each user, output the user's column number and the total number of ratings for that user
+-If a user has no ratings, then output 0 for that users
+Ex/ 1,2 // user 1 has 2 ratings
+
+Task 4:
+-For each pair of movies, compute the number of users who assigned the same (non-blank) rating to both movies
+-You will have a "similarity" score that will be equal to the # of users who rated a pair of movies the same value
+-The output will be of the form:
+Ex/ Movie Title 1, Movie Title 2, Similarity Score
+-For each pair of movies, you will output them in increasing lexicographic order
+Ex/ "Apocalypto" before "Apollo 13" for movie title 1 and 2 order
+    --> For this reason we will be eliminating duplicates (no Apollo 13 -> Apocalypto)
+-Produce output even if the similarity is 0
+
+For Task 4, you should follow an approach similar to a map-side join (look it up).
+--> Use the Hadoop distributed cache and Spark broadcast variables.
+-->> In Java, you throw your input dataset into the distributed cache and share that with all your map tasks
+-->> In Spark, you place the dataset in the broadcast variable and share that with all the partitions
+-->>> We assume the input is small enough that you can fully replicate it to all the workers.
+-->>>> In this particular case, that gives you the best performance
+
+The programs we will write will receive two command line arguments: an INPUT FILE and an OUTPUT PATH
+    --> Output PATH b/c hadoop and spark each create multiple output files
+The input file and output path should be configurable via the command line arguments.
+Make sure you use the generic options parser in Hadoop and the right technique in spark to parse the command line arguments.
+    --> The command line used to run your program may have many more arguments then those used to run your program.
+
+A Hadoop program generates output by emitting tuples in the reducer.
+If the last job in your workflow does not have a reducer, then the program generates output by emitting tuples in the mapper.
+A Spark program generates human-readable output by executing the saveAsTextFile method on an RDD.
+** You should not be opening and writing output files using any other means.
+The input and output files must use comma-delimited records. DO NOT USE TABS OR SPACES.
+    --> Overwrite the default settings in Hadoop and Spark to get the correct behaviour.
+The order of records in the input and output files does not matter.
+    --> To compare your outputs w/ the sample outputs given in the starter code tarball, first coalesce and sort the output files, and then compare using the diff utility.
+    Ex/ cat outputA/* | sort > normalized_outputA.txt
+        cat outputB/* | sort > normalized_outputB.txt
+        diff normalized_outputA.txt normalize_outputB.txt
+    --> Sort fixes the order to compare
+    --> COMPARE RESULTS BETWEEN YOUR HADOOP AND SPARK PROGRAMS TO MAKE SURE THEY MATCH
+
+DO NOT ADD ANY OTHER FILES THAN THE ONES ALREADY THERE.
+DO NOT RENAME THE OBJECTS/FILES.
+
+Each program will take as arguments the input file and output path only.
+If you require temporary output directories for your Hadoop workflows, take the output path and
+append a suffix (ex/ given "myout", append "_tmp" to obtain "myout_tmp").
+**This is only in the case where you need to run multiple Hadoop MR jobs back to back in order to solve a particular problem using the HMR framework.
+
+//~~~~~~ PERFORMANCE ~~~~~~//
+For performance, focus on:
+--> Minimize the # of job stages
+    --> In Hadoop MR, instead of doing 2 jobs back to back, use a single job if that is possible
+    --> And btw, if you need to glue together 2 jobs, it's still 1 program, 1 mainline, but in that mainline you orchestrate job #1 and then job #2
+--> The # of data shuffles
+    --> If it's possible to do something with a mapper and without a reducer, do it that way cus you avoid a shuffle.
+--> The amount of time spent in garbage collection
+
+Performance will be assessed partly by measuring the running times of your programs, and partly by inspecting various performance counters.
+Ex/ # of bytes read, written, shuffled, etc
+
+STRESS MORE ABOUT CORRECTNESS THAN PERFORMANCE
+
+//~~~~~~ CLUSTER HOUSE RULES ~~~~~~//
+Storage space on the cluster is limited, so please key your HDFS usage below 1GB.
+If you want to experiment with large inputs then consider placing them in HDFS under /tmp where they can be accessed by other students.
+    --> This encourages sharing and avoids duplication.
+Please limit yourself to running one Hadoop or Spark job at a time, especially during busy periods such as shortly before the deadline.
+Do not let any job run for more than 30 minutes on the cluster -- kill it immeidately if it gets to that point.
