@@ -314,7 +314,7 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 
 					for (int i = 0; i < resultIndexesInError.size(); i++) {
 						List<String> partialResult = hashPassword(password.subList(jobStartIndexes.get(i), jobEndIndexes.get(i)), logRounds);
-						resultLists.add(resultIndexesInError.get(i), partialResult);	
+						resultLists.set(resultIndexesInError.get(i), partialResult);	
 					}
 
 					for (List<String> list : resultLists) {
@@ -456,7 +456,7 @@ public class BcryptServiceHandler implements BcryptService.Iface {
 
 					for (int i = 0; i < resultIndexesInError.size(); i++) {
 						List<Boolean> partialResult = checkPassword(password.subList(jobStartIndexes.get(i), jobEndIndexes.get(i)), hash.subList(jobStartIndexes.get(i), jobEndIndexes.get(i)));
-						resultLists.add(resultIndexesInError.get(i), partialResult);	
+						resultLists.set(resultIndexesInError.get(i), partialResult);	
 					}
 
 					for (List<Boolean> list : resultLists) {
