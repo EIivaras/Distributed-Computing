@@ -79,3 +79,8 @@ If you want to experiment with large inputs then consider placing them in HDFS u
     --> This encourages sharing and avoids duplication.
 Please limit yourself to running one Hadoop or Spark job at a time, especially during busy periods such as shortly before the deadline.
 Do not let any job run for more than 30 minutes on the cluster -- kill it immeidately if it gets to that point.
+
+//~~~~~~ NOTES ABOUT GETTING FILES ~~~~~~//
+All hadoop files are stored on the hadoop distributed file system, which we do not have direct access to.
+If you want to interact with hdfs, use "hdfs dfs [commands]".
+To get output files, for example, you can use "hdfs dfs -get /user/zwalford/a2_starter_code_output_hadoop"

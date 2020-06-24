@@ -7,10 +7,13 @@ object Task2 {
     val sc = new SparkContext(conf)
 
     val textFile = sc.textFile(args(0))
+    val splitLinesWithKey = textFile.map(line => line.split(','))
+    val splitLinesWithoutKey = splitLinesWithKey.map(line => line.drop(1))
+    val nonEmptyLines = splitLinesWithoutKey.map(line => line.filter(_.nonEmpty))
+    val integerLines = nonEmptyLines.map(line => line.map(_.toInt))
+    val lineSizes = integerLines.map(line => line.size)
 
-    // modify this code
-    val output = textFile.map(x => x);
-    
-    output.saveAsTextFile(args(1))
+    val result = sc.parallelize(Seq(lineSizes.reduce(_+_)))
+    result.saveAsTextFile(args(1))
   }
 }
