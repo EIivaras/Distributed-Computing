@@ -6,14 +6,18 @@ object Task2 {
     val conf = new SparkConf().setAppName("Task 2")
     val sc = new SparkContext(conf)
 
-    val textFile = sc.textFile(args(0))
-    val splitLinesWithKey = textFile.map(line => line.split(','))
-    val splitLinesWithoutKey = splitLinesWithKey.map(line => line.drop(1))
-    val nonEmptyLines = splitLinesWithoutKey.map(line => line.filter(_.nonEmpty))
-    val integerLines = nonEmptyLines.map(line => line.map(_.toInt))
-    val lineSizes = integerLines.map(line => line.size)
+    val result = sc.parallelize(
+                  Seq(
+                    sc.textFile(args(0))
+                    .map(line => line.split(','))
+                    .map(line => line.drop(1))
+                    .map(line => line.filter(_.nonEmpty))
+                    .map(line => line.map(_.toInt))
+                    .map(line => line.size)
+                    .reduce(_+_)
+                  )
+                 )
 
-    val result = sc.parallelize(Seq(lineSizes.reduce(_+_)))
     result.saveAsTextFile(args(1))
   }
 }
