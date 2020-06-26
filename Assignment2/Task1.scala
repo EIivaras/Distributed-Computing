@@ -19,9 +19,8 @@ object Task1 {
                          .map(line => line.map(x => if (x == line.max) 5 else 0))
                          .map(line => line.zipWithIndex.map { case (value, index) => Array(value, index) })
                          .map(line => line.filter(x => x(0) == 5))
-                         .map(line => line.map(x => x(1) + 1))
+                         .map(line => line.map(x => (x(1)+1).toString).mkString(","))
 
-                        // .map(line => line.filter(_.nonEmpty))
     //output.persist()
     
     // var maxRating = 1
@@ -32,6 +31,7 @@ object Task1 {
     // output = output.map(line => line.zipWithIndex.filter{ case (value, index)  => value.toInt == maxRating })
                   //  .map{ case (value, index) => index }
     
-    sc.parallelize(output.first).saveAsTextFile(args(1))
+    // sc.parallelize(output.first).saveAsTextFile(args(1))
+    output.saveAsTextFile(args(1))
   }
 }
