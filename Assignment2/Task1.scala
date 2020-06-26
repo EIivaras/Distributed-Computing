@@ -11,7 +11,7 @@ object Task1 {
     val movieTitles = textFile.map(line => line.split(","))
                               .map(line => line(0))
 
-    var output = textFile.map(line => line.split(","))
+    val output = textFile.map(line => line.split(","))
                          .map(line => line.drop(1))
                          .map(line => line.map(x => if (x == "") "0" else x))
                          .map(line => line.map(x => x.toInt))
@@ -19,7 +19,7 @@ object Task1 {
                          .map(line => line.zipWithIndex.map { case (value, index) => Array(value, index) })
                          .map(line => line.filter(x => x(0) == 5))
                          .map(line => line.map(x => (x(1)+1).toString).mkString(","))
-                         
+
     movieTitles.zip(output).map{ case (title, users) => s"$title,$users" }.saveAsTextFile(args(1))
   }
 }

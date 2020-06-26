@@ -11,10 +11,8 @@ import org.apache.hadoop.mapreduce.Reducer;
 import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
 import org.apache.hadoop.util.GenericOptionsParser;
-
-import jdk.nashorn.internal.runtime.Undefined;
-
 import org.apache.hadoop.io.LongWritable;
+import org.apache.hadoop.io.NullWritable;
 
 // Goal:
 // -Compute the total number of (non-blank) ratings
@@ -25,9 +23,9 @@ import org.apache.hadoop.io.LongWritable;
 
 public class Task2 {
 
-  public static class Task2Mapper extends Mapper<Object, Text, Text, LongWritable> {
+  public static class Task2Mapper extends Mapper<Object, Text, NullWritable, LongWritable> {
     private LongWritable result;
-    private Text outputKey = new Text("Movie");
+    private static final NullWritable nullKey = NullWritable.get();
   
     public void map(Object key, Text value, Context context) throws IOException, InterruptedException {
       result = new LongWritable(0);
@@ -42,18 +40,18 @@ public class Task2 {
           }
         }
       }
-      context.write(outputKey, result);
+      context.write(nullKey, result);
     }
   } 
 
-  public static class Task2Reducer extends Reducer<Text,LongWritable,Text,LongWritable> {
+  public static class Task2Reducer extends Reducer<NullWritable,LongWritable,NullWritable,LongWritable> {
     private LongWritable result = new LongWritable(0);
 
-    public void reduce(Text key, Iterable<LongWritable> numRatings, Context context) throws IOException, InterruptedException {
+    public void reduce(NullWritable nullKey, Iterable<LongWritable> numRatings, Context context) throws IOException, InterruptedException {
       for (LongWritable rating : numRatings) {
         result.set(result.get() + rating.get());
       }
-      context.write(key, result);
+      context.write(nullKey, result);
     }
   }
     
@@ -67,9 +65,9 @@ public class Task2 {
     String[] otherArgs = new GenericOptionsParser(conf, args).getRemainingArgs();
 
     // add code here
-    job.setMapOutputKeyClass(Text.class);
+    job.setMapOutputKeyClass(NullWritable.class);
     job.setMapOutputValueClass(LongWritable.class);
-    job.setOutputKeyClass(Text.class);
+    job.setOutputKeyClass(NullWritable.class);
     job.setOutputValueClass(LongWritable.class);
 
     job.setMapperClass(Task2Mapper.class);
