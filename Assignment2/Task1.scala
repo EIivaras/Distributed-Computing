@@ -13,15 +13,16 @@ object Task1 {
                               .collect()
 
     var output = textFile.map(line => line.split(","))
-                        .map(line => line.drop(1))
-                        .map(line => line.map(x => if (x == "") "0" else x))
-                        .map(line => line.map(x => x.toInt))
-                        .map(line => line.map(x => if (x == line.max) 5 else 0))
-                        .zipWithIndex
-                        // .map(line => line.zipWithIndex.filter { case (value, index)  => value == 5 })
-                        // .map(line => line(0)._2 + 1)
+                         .map(line => line.drop(1))
+                         .map(line => line.map(x => if (x == "") "0" else x))
+                         .map(line => line.map(x => x.toInt))
+                         .map(line => line.map(x => if (x == line.max) 5 else 0))
+                         .map(line => line.zipWithIndex.map { case (value, index) => Array(value, index) })
+                         .map(line => line.filter(x => x(0) == 5))
+                         .map(line => line.map(x => x(1) + 1))
+
                         // .map(line => line.filter(_.nonEmpty))
-    output.persist()
+    //output.persist()
     
     // var maxRating = 1
     // find maxRating
@@ -31,6 +32,6 @@ object Task1 {
     // output = output.map(line => line.zipWithIndex.filter{ case (value, index)  => value.toInt == maxRating })
                   //  .map{ case (value, index) => index }
     
-    output.saveAsTextFile(args(1))
+    sc.parallelize(output.first).saveAsTextFile(args(1))
   }
 }
