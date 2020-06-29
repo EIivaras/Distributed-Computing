@@ -40,7 +40,7 @@ object Task4 {
     // Considering we populated the broadcast variable identically to this idk if how we set up the BC var was right though...
     val result = textFile.map(line => line.split(","))
                                      // Cross-product:
-                                     // Takes a single list, turns it into a list of tuples of lists (one tuple for each pair of movies)
+                                     // Takes a single list, turns it into a list of lists of lists (one list for each pair of movies)
                                      .map(line => allMovies.value.map(record => Array(line, record)))
                                      // A single line now looks like: [ [["LotR","5","4"],["LotR","5","4"]], [["LotR","5","4"],["Hype","2","5"]], [["LotR","5","4"],["Lit","1","3"]]]
                                      // Let's remove duplicates, using the "deep" property to see if array are equal
