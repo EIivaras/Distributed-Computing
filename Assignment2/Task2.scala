@@ -4,6 +4,7 @@ import org.apache.spark.{SparkContext, SparkConf}
 object Task2 {
   def main(args: Array[String]) {
     val conf = new SparkConf().setAppName("Task 2")
+    conf.set("spark.sql.shuffle.partitions", "1")
     val sc = new SparkContext(conf)
 
     val result = sc.parallelize(

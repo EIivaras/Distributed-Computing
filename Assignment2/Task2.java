@@ -73,6 +73,7 @@ public class Task2 {
     job.setMapperClass(Task2Mapper.class);
     job.setCombinerClass(Task2Reducer.class);
     job.setReducerClass(Task2Reducer.class);
+    job.setNumReduceTasks(1);
 
     TextInputFormat.addInputPath(job, new Path(otherArgs[0]));
     TextOutputFormat.setOutputPath(job, new Path(otherArgs[1]));
