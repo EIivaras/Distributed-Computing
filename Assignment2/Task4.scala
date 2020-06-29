@@ -21,7 +21,7 @@ object Task4 {
                                      // Takes a single list, turns it into a list of lists of lists (one list for each pair of movies)
                                      .map(line => allMovies.value.map(record => Array(line, record)))
                                      // A single line now looks like: [ [["LotR","5","4"],["LotR","5","4"]], [["LotR","5","4"],["Hype","2","5"]], [["LotR","5","4"],["Lit","1","3"]]]
-                                     // Let's remove duplicates, using the "deep" property to see if array are equal
+                                     // Let's remove duplicates, using the "deep" property to see if arrays are equal
                                      .map(line => line.filter(outerArray => outerArray(0).deep != outerArray(1).deep))
                                      // We now transpose each array of arrays in the line so that we get one array for each user's ratings (which will have only 2 elements)
                                      .map(line => line.map(outerArray => outerArray.transpose))
