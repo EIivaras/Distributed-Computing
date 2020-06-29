@@ -48,7 +48,7 @@ object Task4 {
                                      // We now transpose each array of arrays in the line so that we get one array for each user's ratings (which will have only 2 elements)
                                      .map(line => line.map(outerArray => outerArray.transpose))
                                      // A single line now looks like: [[["LotR","Hype"], ["5", "2"], ["4", "5"]], [["LotR", "Lit"], ["5", "1"], ["4", "3"]]
-                                     // Now we need to clear to clear out any arrays who have their lexicographical ordering wrong
+                                     // Now we need to clear out any arrays who have their lexicographical ordering wrong
                                      .map(line => line.filter(outerArray => outerArray(0)(0) < outerArray(0)(1)))
                                      // Now we need to clear out any arrays where at least one of the ratings is empty
                                      .map(line => line.map(outerArray => outerArray.filter(innerArray => innerArray(0) != "" && innerArray(1) != "")))
