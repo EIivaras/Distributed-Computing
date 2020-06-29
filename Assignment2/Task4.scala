@@ -14,30 +14,8 @@ object Task4 {
     val sc = new SparkContext(conf)
 
     val textFile = sc.textFile(args(0))
-    // TODO: Is this right? If collect counts as an action is this split up between multiple tasks?
     val allMovies = sc.broadcast(textFile.map(line => line.split(",")).collect())
 
-    // The problem with how they are doing the join in the stack overflow is that they are joining on a key that they expect to match
-    // However, in our case we do NOT want to join on movie title, because we want all pairs of movies (more like a cartesian product)
-    // The only thing we could possible join on is "similar ratings", but that doesn't make much sense either
-    // In order to join, the broadcast var you are joining with needs to be composed of key-value pairs
-    // But in our case we don't really have a "key-value pair" because it's a list composed of movie-title and a bunch of ratings
-    // And even if we did, the key is the movie title
-
-    // With that said, in order to compute a similarity score, we need to, for each PAIR of movies, loop through each pair's users and check the user's ratings to see if they are identical
-    // Control flow I imagine looks like:
-    // 1. Start with list of lines
-    // 2. Split list of lines into list of lists of values
-    // 3. Take a cartesian product (or something) with the broadcast var that combines the list of lists into a list of lists of pairs of lists
-    // 4. Within each pair, drop the movie title and transpose it -- this converts the list of lists of pairs of lists (tuples) into a list of lists of x-many lists (each with a size of 2)
-    // 5. Map the lists created by the transposition such that any empty values are converted to 0s (as a string)
-    // 6. Filter the lists created by the transposition to keep inner lists of size 2 that have the same value for both contained elements
-    // 7. For each list of x-many lists, we want to then take a sum of the # of elements remaining
-    // 8. Then, we get a list of lists, each of which contains the result of the sum for the movie in question
-    // --> The question at this point is: how do we figure out which movie the score belongs to?
-
-    // This is now an array with tuples that store Array[String]s
-    // Considering we populated the broadcast variable identically to this idk if how we set up the BC var was right though...
     val result = textFile.map(line => line.split(","))
                                      // Cross-product:
                                      // Takes a single list, turns it into a list of lists of lists (one list for each pair of movies)
