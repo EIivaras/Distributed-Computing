@@ -22,7 +22,7 @@ object Task4 {
                                      .map(line => allMovies.value.map(record => Array(line, record)))
                                      // A single line now looks like: [ [["LotR","5","4"],["LotR","5","4"]], [["LotR","5","4"],["Hype","2","5"]], [["LotR","5","4"],["Lit","1","3"]]]
                                      // Let's remove duplicates, using the "deep" property to see if arrays are equal
-                                     .map(line => line.filter(outerArray => outerArray(0).deep != outerArray(1).deep))
+                                     .map(line => line.filter(outerArray => outerArray(0)(0) != outerArray(1)(0)))
                                      // We now transpose each array of arrays in the line so that we get one array for each user's ratings (which will have only 2 elements)
                                      .map(line => line.map(outerArray => outerArray.transpose))
                                      // A single line now looks like: [[["LotR","Hype"], ["5", "2"], ["4", "5"]], [["LotR", "Lit"], ["5", "1"], ["4", "3"]]
@@ -37,11 +37,8 @@ object Task4 {
                                      // Now we sum each list of ratings
                                      .map(line => line.map(tuple => (tuple._1, tuple._2.sum)))
                                      // Let's now convert the output to the form we want it in
-                                     .map(line => line.map(tuple => s"${tuple._1(0)}, ${tuple._1(1)}, ${tuple._2}"))
-                              
-    // Last thing I need to do is merge the RDD of arrays into an RDD of a single array?
-    // OTHERWISE IT'S WORKING!
+                                     .flatMap(line => line.map(tuple => s"${tuple._1(0)}, ${tuple._1(1)}, ${tuple._2}"))
                                         
-    sc.parallelize(result.first).saveAsTextFile(args(1))
+    result.saveAsTextFile(args(1))
   }
 }
