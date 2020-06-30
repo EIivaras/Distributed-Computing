@@ -19,8 +19,8 @@ import org.apache.hadoop.util.GenericOptionsParser;
 public class Task3 {
 
   public static class Task3Mapper extends Mapper<Object, Text, Text, IntWritable> {
-    private IntWritable one = new IntWritable(1);
-    private IntWritable zero = new IntWritable(0);
+    private static final IntWritable one = new IntWritable(1);
+    private static final IntWritable zero = new IntWritable(0);
   
     public void map(Object key, Text value, Context context) throws IOException, InterruptedException {
       String[] tokens = value.toString().split(",");
