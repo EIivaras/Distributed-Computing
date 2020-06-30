@@ -23,7 +23,6 @@ object Task3 {
                    .zipWithIndex
                    .map{ case (value, index) => s"${index+1},$value"}
 
-    // TODO: All correct but need to not print out brackets (due to tuple)
     sc.parallelize(result).saveAsTextFile(args(1))
   }
 }
