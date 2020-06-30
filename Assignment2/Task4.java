@@ -29,7 +29,7 @@ import org.apache.hadoop.util.GenericOptionsParser;
 // -Throw your input dataset into the "Hadoop Distributed Cache" and share that with all your map tasks
 
 public class Task4 {
-
+  // TODO: fix out of (heap) memory issue for large inputs
   public static class Task4Mapper extends Mapper<Object, Text, Text, IntWritable> {
     TreeMap<String, List<String>> allMovieRatings = null; /* Map sorted lexicographically by key (movieTitle) */
     private Text moviePair = new Text();
