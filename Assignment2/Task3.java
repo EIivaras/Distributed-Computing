@@ -21,10 +21,10 @@ public class Task3 {
   public static class Task3Mapper extends Mapper<Object, Text, Text, IntWritable> {
     private static final IntWritable one = new IntWritable(1);
     private static final IntWritable zero = new IntWritable(0);
+    Text outputKey = new Text("");
   
     public void map(Object key, Text value, Context context) throws IOException, InterruptedException {
       String[] tokens = value.toString().split(",");
-      Text outputKey = new Text("");
       for (int i = 1; i < tokens.length; i++) {
         outputKey.set(Integer.toString(i));
         if (!tokens[i].equals(null) && !tokens[i].equals("")) {
@@ -38,9 +38,11 @@ public class Task3 {
 
   public static class Task3Reducer extends Reducer<Text, IntWritable, Text, IntWritable> {
 
-    public void reduce(Text user, Iterable<IntWritable> userRated, Context context) throws IOException, InterruptedException {
-      IntWritable result = new IntWritable(0);
+    IntWritable result = new IntWritable(0);
 
+    public void reduce(Text user, Iterable<IntWritable> userRated, Context context) throws IOException, InterruptedException {
+      result.set(0);
+      
       for (IntWritable rated : userRated) {
           result.set(result.get() + rated.get());
       }

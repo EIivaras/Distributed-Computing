@@ -24,12 +24,12 @@ import org.apache.hadoop.io.NullWritable;
 public class Task2 {
 
   public static class Task2Mapper extends Mapper<Object, Text, NullWritable, LongWritable> {
-    private LongWritable result;
+    private LongWritable result = new LongWritable(0);
     private static final NullWritable nullKey = NullWritable.get();
   
     public void map(Object key, Text value, Context context) throws IOException, InterruptedException {
-      result = new LongWritable(0);
       String[] tokens = value.toString().split(",");
+      result.set(0);
       for (int i = 0; i < tokens.length; i++) {
         if (!tokens[i].equals(null) && !tokens[i].equals("")) {
           try {

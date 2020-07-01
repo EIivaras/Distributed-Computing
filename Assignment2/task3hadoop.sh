@@ -25,7 +25,7 @@ echo --- Jarring
 $JAVA_HOME/bin/jar -cf Task3.jar Task3*.class
 
 echo --- Running
-INPUT=/a2_inputs/in4.txt
+INPUT=/a2_inputs/smalldata.txt
 OUTPUT=/user/${USER}/a2_starter_code_output_hadoop/
 
 $HADOOP_HOME/bin/hdfs dfs -rm -R $OUTPUT
