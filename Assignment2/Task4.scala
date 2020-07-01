@@ -14,36 +14,21 @@ object Task4 {
     val sc = new SparkContext(conf)
 
     val textFile = sc.textFile(args(0))
-    val numValues = textFile.first.count(_ == ',') + 1
+    val allMovies = sc.broadcast(textFile.map(line => line.split(",", -1)).collect())
 
-    val allMovies = sc.broadcast(textFile.map(line => line.split(","))
-                                         .map(line => if (line.size < numValues) line ++ Array.fill(numValues - line.size)("") else line)
-                                         .collect())
+    val result = textFile.map(line => line.split(",", -1))
+                          // Cross-product:
+                          // Takes a single list, turns it into a list of tuples of tuples (one tuple for each pair of movies)
+                         .map(line => allMovies.value.map(record => ((line(0), record(0)), (line.drop(1), record.drop(1)))))
+                         // A single line now looks like: [ (("LotR", "LotR"), (["5", "4"], ["5", "4"])), (("LotR","Hype"), (["5", "4"], ["2","5"]))]
+                         // Remove duplicates and those with the wrong lexicographical ordering
+                         .map(line => line.filter(tuple => tuple._1._1 < tuple._1._2))
+                         // .zipped function takes a tuple of lists and transposes it into a list of tuples, each tuple of which we convert to 1 or 0 before summing
+                         .map(line => line.map(tuple => (tuple._1, tuple._2.zipped.map((a, b) => if (a == b && a != "" && b != "") 1 else 0).sum)))
+                         // Format output correctly
+                         .flatMap(line => line.map(tuple => s"${tuple._1._1}, ${tuple._1._2}, ${tuple._2}"))
+                         
 
-    val result = textFile.map(line => line.split(","))
-                         .map(line => if (line.size < numValues) line ++ Array.fill(numValues - line.size)("") else line)
-                         // Cross-product:
-                         // Takes a single list, turns it into a list of lists of lists (one list for each pair of movies)
-                         .map(line => allMovies.value.map(record => Array(line, record)))
-                         // A single line now looks like: [ [["LotR","5","4"],["LotR","5","4"]], [["LotR","5","4"],["Hype","2","5"]], [["LotR","5","4"],["Lit","1","3"]]]
-                         // Let's remove duplicates, using the "deep" property to see if arrays are equal
-                         .map(line => line.filter(outerArray => outerArray(0)(0) != outerArray(1)(0)))
-                         // We now transpose each array of arrays in the line so that we get one array for each user's ratings (which will have only 2 elements)
-                         .map(line => line.map(outerArray => outerArray.transpose))
-                         // A single line now looks like: [[["LotR","Hype"], ["5", "2"], ["4", "5"]], [["LotR", "Lit"], ["5", "1"], ["4", "3"]]
-                         // Now we need to clear out any arrays who have their lexicographical ordering wrong
-                         .map(line => line.filter(outerArray => outerArray(0)(0) < outerArray(0)(1)))
-                         // Now we need to clear out any arrays where at least one of the ratings is empty
-                         .map(line => line.map(outerArray => outerArray.filter(innerArray => innerArray(0) != "" && innerArray(1) != "")))
-                         // Now we need to split the names up from the ratings
-                         .map(line => line.map(outerArray => (outerArray(0), outerArray.drop(1))))
-                         // Now we need to map each list of ratings to 1s and 0s if their scores match
-                         .map(line => line.map(tuple => (tuple._1, tuple._2.map(innerArray => if (innerArray(0) == innerArray(1)) 1 else 0))))
-                         // Now we sum each list of ratings
-                         .map(line => line.map(tuple => (tuple._1, tuple._2.sum)))
-                         // Let's now convert the output to the form we want it in
-                         .flatMap(line => line.map(tuple => s"${tuple._1(0)}, ${tuple._1(1)}, ${tuple._2}"))
-                                        
     result.saveAsTextFile(args(1))
   }
 }
