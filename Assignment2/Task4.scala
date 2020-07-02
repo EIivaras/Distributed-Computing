@@ -26,9 +26,8 @@ object Task4 {
                          // .zipped function takes a tuple of lists and transposes it into a list of tuples, each tuple of which we convert to 1 or 0 before summing
                          .map(line => line.map(tuple => (tuple._1, tuple._2.zipped.map((a, b) => if (a == b && a != "" && b != "") 1 else 0).sum)))
                          // Format output correctly
-                         .flatMap(line => line.map(tuple => s"${tuple._1._1}, ${tuple._1._2}, ${tuple._2}"))
+                         .flatMap(line => line.map(tuple => s"${tuple._1._1},${tuple._1._2},${tuple._2}"))
                          
-
     result.saveAsTextFile(args(1))
   }
 }
