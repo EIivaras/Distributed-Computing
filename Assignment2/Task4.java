@@ -1,8 +1,6 @@
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.Iterator;
@@ -29,9 +27,8 @@ import org.apache.hadoop.util.GenericOptionsParser;
 // -Throw your input dataset into the "Hadoop Distributed Cache" and share that with all your map tasks
 
 public class Task4 {
-  // TODO: fix out of (heap) memory issue for large inputs
   public static class Task4Mapper extends Mapper<Object, Text, Text, IntWritable> {
-    TreeMap<String, List<String>> allMovieRatings = null; /* Map sorted lexicographically by key (movieTitle) */
+    TreeMap<String, String> allMovieRatings = null; /* Map sorted lexicographically by key (movieTitle) */
     private Text moviePair = new Text();
     private IntWritable score;
 
@@ -48,15 +45,10 @@ public class Task4 {
 
           String line = "";
           while ((line = reader.readLine()) != null) {
-            String[] values = line.split(",");
-            List<String> ratings = new ArrayList<>();
-            for (int i = 1; i < values.length; i++) {
-              ratings.add(values[i]);
-            }
-            allMovieRatings.put(values[0], ratings);
+            String movieTitle = line.substring(0, line.indexOf(","));
+            allMovieRatings.put(movieTitle, line);
           }
         } catch (Exception e) {
-          //TODO: handle exception
           System.out.println("Failed to read cached file");
           System.exit(1);
         }
@@ -65,27 +57,37 @@ public class Task4 {
 
     public void map(Object key, Text value, Context context) throws IOException, InterruptedException {
       score = new IntWritable(0);
-      String[] firstMovie = value.toString().split(",");
+      String firstMovie = value.toString();
+      String firstMovieTitle = firstMovie.substring(0,firstMovie.indexOf(","));
       
       // Iterate through second movies in the pair (all movies appearing lexicographically after firstMovie)
-      Iterator<Map.Entry<String, List<String>>> iter = allMovieRatings.tailMap(firstMovie[0]).entrySet().iterator();
+      Iterator<Map.Entry<String, String>> iter = allMovieRatings.tailMap(firstMovieTitle).entrySet().iterator();
       if (iter.hasNext()) iter.next();
       while (iter.hasNext()) {
-        Map.Entry<String, List<String>> secondMovie = iter.next();
+        Map.Entry<String, String> secondMovie = iter.next();
 
+        // get character indexes of first rating in strings
+        int i = firstMovie.indexOf(",") + 1;
+        int j = secondMovie.getValue().indexOf(",") + 1;
         // Compute similarity score between both movies
-        int i = 1;
-        for (String m2Rating : secondMovie.getValue()) {
-          if (!m2Rating.equals(null) && !m2Rating.equals("") && i < firstMovie.length) {
-            String m1Rating = firstMovie[i];
-            if (m2Rating.equals(m1Rating)) {
-              score.set(score.get() + 1);
-            }
+        while (i < firstMovie.length() && j < secondMovie.getValue().length()){
+          char m1Rating = firstMovie.charAt(i);
+          char m2Rating = secondMovie.getValue().charAt(j);
+          
+          if (m1Rating != ',' && m2Rating != ',' && m2Rating == m1Rating) {
+            score.set(score.get() + 1);
           }
-          i++;
+          
+          // if m1Rating is a comma, it's an empty rating (comma preceded by another comma)
+          // otherwise, m1Rating is a number and a comma character follows it; Skip that comma to next rating
+          if (m1Rating == ',') i += 1;
+          else i += 2;
+
+          if (m2Rating == ',') j += 1;
+          else j += 2;
         }
         
-        moviePair.set(firstMovie[0] + "," + secondMovie.getKey());
+        moviePair.set(firstMovieTitle + "," + secondMovie.getKey());
         context.write(moviePair, score);
         score.set(0);
       }
@@ -108,7 +110,6 @@ public class Task4 {
       // find complete HDFS path string and convert it to a URI (required input type for addCacheFile)
       job.addCacheFile(new URI((new Path(otherArgs[0])).toString()));
     } catch (Exception e) {
-      //TODO: handle exception
       System.out.println("Distributed cache file failed to add");
       System.exit(1);
     }
