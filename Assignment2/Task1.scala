@@ -8,18 +8,16 @@ object Task1 {
 
     val textFile = sc.textFile(args(0))
 
-    val movieTitles = textFile.map(line => line.split(","))
-                              .map(line => line(0))
-
     val output = textFile.map(line => line.split(","))
-                         .map(line => line.drop(1))
                          .map(line => line.map(x => if (x == "") "0" else x))
-                         .map(line => line.map(x => x.toInt))
-                         .map(line => line.map(x => if (x == line.max) 5 else 0))
-                         .map(line => line.zipWithIndex.map { case (value, index) => Array(value, index) })
-                         .map(line => line.filter(x => x(0) == 5))
-                         .map(line => line.map(x => (x(1)+1).toString).mkString(","))
+                         .map(line => (line(0), line.drop(1)))
+                         .map(t => (t._1, t._2.map(x => x.toInt)))
+                         .map(t => (t._1, t._2.map(x => if (x == t._2.max) 5 else 0)))
+                         .map(t => (t._1, t._2.zipWithIndex))
+                         .map(t => (t._1, t._2.filter(x => x._1 == 5)))
+                         .map(t => (t._1, t._2.map(x => (x._2 + 1).toString).mkString(",")))
+                         .map(t => t._1 + "," + t._2)
 
-    movieTitles.zip(output).map{ case (title, users) => s"$title,$users" }.saveAsTextFile(args(1))
+    output.saveAsTextFile(args(1))
   }
 }
