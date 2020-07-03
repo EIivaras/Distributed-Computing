@@ -7,7 +7,7 @@ object Task2 {
     val sc = new SparkContext(conf)
 
     val result = sc.textFile(args(0))
-                   .map(line => line.split(','))
+                   .map(line => line.split(","))
                    .map(line => line.drop(1))
                    .map(line => line.filter(_.nonEmpty))
                    .map(line => line.map(_.toInt))

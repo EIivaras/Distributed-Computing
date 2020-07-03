@@ -31,7 +31,7 @@ echo --- Jarring
 $JAVA_HOME/bin/jar -cf Task1.jar Task1*.class
 
 echo --- Running
-INPUT=/a2_inputs/smalldata.txt
+INPUT=/tmp/manualtestcase2.txt
 OUTPUT=/user/${USER}/a2_starter_code_output_spark/
 
 $HADOOP_HOME/bin/hdfs dfs -rm -R $OUTPUT

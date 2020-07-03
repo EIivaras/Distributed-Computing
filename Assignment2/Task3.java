@@ -24,7 +24,7 @@ public class Task3 {
     Text outputKey = new Text("");
   
     public void map(Object key, Text value, Context context) throws IOException, InterruptedException {
-      String[] tokens = value.toString().split(",");
+      String[] tokens = value.toString().split(",", -1);
       for (int i = 1; i < tokens.length; i++) {
         outputKey.set(Integer.toString(i));
         if (!tokens[i].equals(null) && !tokens[i].equals("")) {

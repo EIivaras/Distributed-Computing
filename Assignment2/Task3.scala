@@ -14,7 +14,7 @@ object Task3 {
     val textFile = sc.textFile(args(0))
 
     val result =  sc.textFile(args(0))
-                   .map(line => line.split(','))
+                   .map(line => line.split(",",-1))
                    .map(line => line.drop(1))
                    .map(line => line.map(x => if (x == "") "0" else "1"))
                    .map(line => line.map(_.toInt))
