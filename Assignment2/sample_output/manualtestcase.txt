@@ -1,0 +1,41 @@
+Task1 Expected Output:
+
+A Shot in the Dark,1,6
+Lord of the Rings,6
+Finding Nemo,4
+The Hobbit,1,2,4
+Avengers: Endgame,1,2,3,4,5,1
+The Lorax,9
+Despicable Me,1,3,5
+Avengers: Infinity War,2,5,7,8,9
+Ghostbusters,1,5,7,8
+Saving Private Ryan,4
+
+Task 2 Expected Output:
+
+71
+
+Task 3 Expected Output:
+
+1,9
+2,9
+3,8
+4,9
+5,8
+6,8
+7,6
+8,8
+9,6
+10,0
+
+Task 4 Expected Output (ONLY FOR A SHOT IN THE DARK AS THERE'S A TON):
+
+A Shot in the Dark,Lord of the Rings,2
+A Shot in the Dark,Finding Nemo,1
+A Shot in the Dark,The Hobbit,2
+A Shot in the Dark,Avengers: Endgame,1
+A Shot in the Dark,The Lorax,1
+A Shot in the Dark,Despicable Me,1
+A Shot in the Dark,Avengers: Infinity War,0
+A Shot in the Dark,Ghostbusters,0
+A Shot in the Dark,Saving Private Ryan,0
