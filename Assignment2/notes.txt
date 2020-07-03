@@ -84,3 +84,10 @@ Do not let any job run for more than 30 minutes on the cluster -- kill it immeid
 All hadoop files are stored on the hadoop distributed file system, which we do not have direct access to.
 If you want to interact with hdfs, use "hdfs dfs [commands]".
 To get output files, for example, you can use "hdfs dfs -get /user/zwalford/a2_starter_code_output_hadoop"
+
+//~~~~~~ NOTES ON FINDING PERFORMANCE STATISTICS/PRINTOUTS FOR SPARK AND HADOOP ~~~~~~//
+Stuff like the garbage collection time is listed when you complete the job, but you may want to come back to it later (such as after exiting the terminal).
+You can use `yarn app -list -appStates ALL -appTypes [MAPREDUCE OR SPARK] | grep [your userid]` (without the square brackets) in order to get a list of your past jobs.
+The entry with the HIGHEST application ID is the most recent. MAKE SURE YOU DON'T MIX UP APPLICATION AND JOB ID!
+To pull the logs for that application, you can use `yarn logs -applicationId [application ID you copied] > [file to redirect to].`
+Then, just look at the file that you redireced the logs to for your output.
