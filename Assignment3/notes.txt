@@ -1,0 +1,102 @@
+Step 1: Set up ZooKeeper
+- You can access it on manta.uwaterloo.ca on the default TCP port (2181)
+- If you want to set up your own instance, look at slides for info
+
+Step 2: Create a parent znode
+- ZooKeeper node must be created manually before you can run A3 code
+- Create your znode using the provided script: ./createznode.sh
+    --> You only need to do this ONCE for the assignment, and DO NOT HARDCODE THE ZNODE NAME
+
+Step 3: Study the client code
+--> Really understand what it is doing
+- The client determines the primary replica by listing the chidlren of the designation znode, as created in step 2
+- The client sorts the returned list of children in ascending lexicographical order and identifies the smallest child as the znode denoting the primary replica
+    - The client then parses the data from this node to extract the hostname and port number to the primary and sets a watch
+- If the primary fails, the client receives a notification and executes the above procedure again to determine the new primary
+
+Step 4: Write the server bootstrap code
+- On startup, each server process must contact ZooKeeper and create a child node uner a parent znode specified on the command linearizable
+    - This parent znode must be the same as the one queried by the client to determine the address of the primary
+- The newly created child znode must have both the EPHEMERAL and SEQUENCE flags set
+    - Furthermore, child znode must store, as its data payload, a host:port string denoting the address of the server process
+- The server whose child znode has the smallest name in the lexicographic order is the primary
+    - The other one (if it exists) is the secondary or backup
+
+Step 5: Add Replication
+
+- To implement replication, it is critical that each server process knows whether it is the primary or backup 
+    - This can be done by querying ZooKeeper similarly to the client code
+- The primary server process must implement concurrency control above and beyond the synchronization provided internally by the ConcurrentHashMap (or another Java data structure)
+    - In the system we have two copies of the data (one on the primary, one on the backup), and a ConcurrentHashMap would only hold ONE of these copies (and the synchronization for the map is only for that one map)
+        - Only using the baked-in sychronization will NOT be enough to make the system linearizable as we have 2
+    - If in doubt, use a Java "lock" for concurrency control -- DO NOT USE ZOOKEEPER LOCKS, THEY ARE VERY SLOW.
+- Additionally, DO NOT STORE ALL THE KEY-VALUE PAIRS IN ZOOKEEPER
+    - ZooKeeper is only used for failure detection and primary determination, it should not be used for concurrency control or storage of your main dataset
+
+Step 6 - Implement Recovery From Failure:
+
+- If primary server process crashes, backup server process must detect AUTOMATICALLY that the ephermal znode created by the primary is gone
+- At this point, backup must become the new primary and begin accepting "get" and "put" requests from clients
+    - The provided client code with automatically re-direct connections to the new primary after some time
+        --> I believe since the client determines who the primary is, they'll set some internal variable that the nodes will have to check in order to determine if they are the primary
+            --> Step 5 says this can be done by querying ZooKeeper similar to how the client does
+- The new primary may execute without a backup for some period of time immediately after a crash failure until a backup is started
+- When the new backup is started (either manually during testing or via the grading script), it MUST COPY ALL KEY-VALUE PAIRS OVER FROM THE NEW PRIMARY TO AVOID DATA LOSS in the event that the new primary fails as well
+
+Step 7: Test Thoroughly
+- To test your code, run an experiment similar to the following:
+    1. Ensure that ZooKeeper is running and create the parent znode
+        --> ONE TIME THING FOR THE WHOLE ASSIGNMENT, AS DONE IN STEP 2
+    2. Start primary and backup server processes
+        - Which one is which is decided at runtime, so you're simply starting 2 processes of the server executing the same code
+        - They will talk to ZooKeeper to decide who is the primary and the backup
+            - You do not decide the roles, the processes decide on their own
+    3. Launch the provided client and begin executing a long workload
+        - Somewhere between 10 seconds and 1 minute
+    4. Wait two or more seconds, and kill the primary OR the backup
+    5. Wait two or more seconds, and start a new backup server
+    6. Repeat steps 4 and 5 for several iterations
+- If you get no exceptions (aside from one mentioned below) and linearizability checker tells you your execution was linearizable, repeat the exercise
+    - Change client settings, use more/fewer threads (experiment with different levels of concurrency) and convince yourself that your implementation is correct
+- The key-value service should continue to process get and put requests after each failure, including b/w steps 4 and 5 when the new primary is running temporarily without a backup
+- The client may throw exceptions in step 4, but there should be NO LINEARIZABILITY VIOLATIONS
+    - Client will automatically try and re-establish a connection to the new primary
+        - Programmed to do that, nothing you need to do OTHER THAN CORRECTLY CONFIGURE THE STATE IN ZOOKEEPER
+- THIS IS A VERY DIFFICULT ASSIGNMENT, TEST THOROUGHLY
+
+Packaging and Submission:
+- You may use multiple Java files but do not change the name of the client (A3Client) or the server (StorageNode) programs, or their command line arugments
+- Do NOT change the implementation of the client AT ALL
+- You must modify the server code to complete its implementation
+- You may add new procedures to a3.thrift, but do NOT add services
+
+Grading Scheme:
+- 60% correctness, 40% performance
+- Penalties apply in the following cases:
+    - Solution uses oneway RPCs for replication
+        - DO NOT USE ONE WAY RPCs (it assumes network is reliable)
+    - Solution cannot be compile or throws an exception during testing despite receiving valid input
+    - Solution produces incorrect outputs (i.e. non-linearizable)
+        - Heavy penalties
+    - Solution is improperly packaged/you submitted starter code instead of Solution
+
+Hints and Tips:
+- Testing by graders will be done with 1-2 server processes at a time
+    - This means ONE PRIMARY and AT MOST ONE BACKUP REPLICA
+- Throughput of more than 25000 ops/s is achieveable on ecelinux hosts with 8 client threads
+    - To achieve this, will need efficient concurrency control
+- Test with both small data sets (ex/ key-value pairs) and larger data sets (ex/ 1M key-value pairs)
+    - Small data sets = more contention, larger data sets = less contention, effects not only amount of data stored but behaviour of concurrency contorl mechanism
+- ! IMPORTANT ! SPREAD YOUR PROCESSES AMONG MULTIPLE ECELINUX HOSTS
+    - Do NOT run everything on one machine!
+        - Your network will be a little faster than it should be -- you will either run out of threads or get overly optimistic results
+- Be prepared to handle frequent failures (one every 2 seconds), even w/ 1M key-value pairs
+    - Could fail the primary or the backup each time, decided by grading script
+- ! IMPORTANT ! Failures will be simulated on linux using "kill -9", NOT using "Ctrl + C"
+- Be prepared to handle port reuse
+    - If primary fails and is restarted as backup on same host w/ same RPC port, should still work
+        - Tweak your socket settings if you need to in order to make sure you can reuse the same ports even after a process is killed using "kill -9"
+
+Final Notes:
+- Look at the two other slide decks in the A3 directory on LEARN for additional info on how to test your solution and scenarios to look out for
+- Look at tutorial week08 on Apache Curator
