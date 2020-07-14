@@ -1,5 +1,7 @@
 Step 1: Set up ZooKeeper
-- You can access it on manta.uwaterloo.ca on the default TCP port (2181)
+- You do not need to set up your own ZooKeeper service since one is located on manta.uwaterloo.ca on the default TCP port (2181)
+    --> You do NOT connect to this directly, this is just where it is hosted and can be accessed by your processes
+    --> ALL OF YOUR PROCESSES WILL STILL RUN ON ECELINUX
 - If you want to set up your own instance, look at slides for info
 
 Step 2: Create a parent znode
@@ -9,13 +11,13 @@ Step 2: Create a parent znode
 
 Step 3: Study the client code
 --> Really understand what it is doing
-- The client determines the primary replica by listing the chidlren of the designation znode, as created in step 2
+- The client determines the primary replica by listing the children of the designation znode, as created in step 2
 - The client sorts the returned list of children in ascending lexicographical order and identifies the smallest child as the znode denoting the primary replica
     - The client then parses the data from this node to extract the hostname and port number to the primary and sets a watch
 - If the primary fails, the client receives a notification and executes the above procedure again to determine the new primary
 
 Step 4: Write the server bootstrap code
-- On startup, each server process must contact ZooKeeper and create a child node uner a parent znode specified on the command linearizable
+- On startup, each server process must contact ZooKeeper and create a child node under a parent znode specified on the command line
     - This parent znode must be the same as the one queried by the client to determine the address of the primary
 - The newly created child znode must have both the EPHEMERAL and SEQUENCE flags set
     - Furthermore, child znode must store, as its data payload, a host:port string denoting the address of the server process
@@ -100,3 +102,26 @@ Hints and Tips:
 Final Notes:
 - Look at the two other slide decks in the A3 directory on LEARN for additional info on how to test your solution and scenarios to look out for
 - Look at tutorial week08 on Apache Curator
+
+# NOTES ON A3Client.java #
+
+- The way the A3Client code works is as follows:
+- Step 1: Creates the "client" through the client constructor
+    - The zkConnectString is set to manta.uwaterloo.ca:2181, and the zkNode is set to /[userid], such as /zwalford (where the parent znode is housed)
+- Step 2: Calls client.start() in order to initialized the Curator client, used to talk to ZK, and a logger
+- Step 3: Runs client.execute()
+    - This begins by calling the getPrimary() function in order to get the address of the primary znode
+        - In this function, the main thread sorts the children of the znode stored at /[userid] and picks the one with lowest lexicographical ordering to the be the primary
+    - After that, a bunch of threads are initialized 
+        - These threads begin by instantiating a thrift client of the KeyValueService
+            - The service is instantiated and run on the PRIMARY znode
+                --> That is, the threads will execute RPCs on the primary znode!
+    - Once the local client to talk to the KeyValueService is set up, the threads execute get/put requests of random key/value pairs on the client with equal probability
+        - They will continue to do this in a loop every 100 ms until the "done" property is set to true
+- Step 4: Main thread sleeps for a user-determined number of seconds before waking up, setting done=true, and joining on all the threads
+- Step 5: Print out avg latency and throughput before finishing and closing the curator client & logger
+
+# IMPLEMENTATION NOTES #
+
+- The server nodes we'll be running are created from "StorageNode.java"
+    - All server nodes are capable of being the primary, so they need code to figure out which one they are
