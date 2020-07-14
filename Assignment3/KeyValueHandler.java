@@ -37,6 +37,10 @@ public class KeyValueHandler implements KeyValueService.Iface {
         myMap = new ConcurrentHashMap<String, String>();	
     }
 
+    public void connect(String host, int port) {
+        System.out.println(String.format("Received connection from %s:%d", host, port));
+    }
+
     private boolean amIPrimary() throws Exception {
         curClient.sync(); // Sync the ZK cluster to make sure we get the newest data (is that needed for this?)
 		List<String> children = this.curClient.getChildren().forPath(this.zkNode);

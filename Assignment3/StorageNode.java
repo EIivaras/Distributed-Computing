@@ -69,5 +69,31 @@ public class StorageNode {
 		curClient.create()
 				.withMode(CreateMode.EPHEMERAL_SEQUENTIAL)
 				.forPath(args[3] + "/child", payloadInBytes);
+
+		// On startup, should the one that isn't the primary talk to the one who is?
+		// They'll probably need to send messages to each other
+		curClient.sync();
+		List<String> children = curClient.getChildren().forPath(args[3]);
+
+		for (String child : children) {
+			byte[] data = curClient.getData().forPath(args[3] + "/" + child);
+			String strData = new String(data);
+
+			// If the child of the parent I just got is NOT equal to me
+			if (!strData.equals(payload)) {
+				String[] otherSplitData = strData.split(":");
+				String otherHostName = otherSplitData[0];
+				Integer otherPort = Integer.parseInt(otherSplitData[1]);
+
+				TSocket sock = new TSocket(otherHostName, otherPort);
+				TTransport transport = new TFramedTransport(sock);
+				transport.open();
+				TProtocol protocol = new TBinaryProtocol(transport);
+				KeyValueService.Client client = new KeyValueService.Client(protocol);
+
+				client.connect(args[0], Integer.parseInt(args[1]));
+				transport.close();
+			}
+		}
 	}
 }
