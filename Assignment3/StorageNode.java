@@ -61,15 +61,13 @@ public class StorageNode {
 		// TODO: create an ephemeral node in ZooKeeper
 		// Child znode must store, as its data payload, a host:port string denoting the address of the server process
 		
-		// NOTE: Right now, args[0] is just "hostname" as specified in runserver.sh
-		// I imagine we need to change this or extract it some other way?
 		String payload = String.format("%s:%s", args[0], args[1]);
 		byte[] payloadInBytes = payload.getBytes();
 
 		// args[3] = /zwalford
-		// TODO: Does it matter if the path is "/parent" or "/parent/[someNameForTheChild]" when creating the child nodes? 
+		// NOTE: When a child node is created, it's reference is stored in string form as "child000000000[someNumber]"
 		curClient.create()
 				.withMode(CreateMode.EPHEMERAL_SEQUENTIAL)
-				.forPath(args[3], payloadInBytes);
+				.forPath(args[3] + "/child", payloadInBytes);
 	}
 }
