@@ -28,6 +28,7 @@ public class KeyValueHandler implements KeyValueService.Iface {
     private String zkNode;
     private String host;
     private int port;
+    private KeyValueService.Client backupClient;
 
     public KeyValueHandler(String host, int port, CuratorFramework curClient, String zkNode) {
         this.host = host;
@@ -39,6 +40,21 @@ public class KeyValueHandler implements KeyValueService.Iface {
 
     public void connect(String host, int port) {
         System.out.println(String.format("Received connection from %s:%d", host, port));
+        try {
+            TSocket sock = new TSocket(host, port);
+            TTransport transport = new TFramedTransport(sock);
+            transport.open();
+            TProtocol protocol = new TBinaryProtocol(transport);
+            this.backupClient = new KeyValueService.Client(protocol);
+
+            this.backupClient.replicateData(new ArrayList<String>(), new ArrayList<String>());
+        } catch (Exception e) {
+            System.out.println("ERROR: Failed to set up client to talk to other storage node.");
+        }
+    }
+
+    public void replicateData(List<String> keys, List<String> values) {
+        System.out.println("Received data replication request from primary.");
     }
 
     private boolean amIPrimary() throws Exception {
