@@ -70,8 +70,6 @@ public class StorageNode {
 				.withMode(CreateMode.EPHEMERAL_SEQUENTIAL)
 				.forPath(args[3] + "/child", payloadInBytes);
 
-		// On startup, should the one that isn't the primary talk to the one who is?
-		// They'll probably need to send messages to each other
 		curClient.sync();
 		List<String> children = curClient.getChildren().forPath(args[3]);
 

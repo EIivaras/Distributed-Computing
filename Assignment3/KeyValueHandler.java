@@ -53,7 +53,6 @@ public class KeyValueHandler implements KeyValueService.Iface {
     public void connect(String host, int port) {
         System.out.println(String.format("Received connection from %s:%d", host, port));
         while(!this.lock.tryLock()) { }
-        this.connectedBackup = true;
         this.backupClientList = new ArrayList<Client>();
         try {
             for (int i = 0; i < maxThreads; i++) {
@@ -68,6 +67,7 @@ public class KeyValueHandler implements KeyValueService.Iface {
                     backupClient.replicateData(this.myMap);
                 }
             }
+            this.connectedBackup = true;
         } catch (Exception e) {
             System.out.println("ERROR: Failed to set up client to talk to other storage node.");
         }
