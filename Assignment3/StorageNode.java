@@ -92,6 +92,7 @@ public class StorageNode {
 				KeyValueService.Client client = new KeyValueService.Client(protocol);
 
 				client.connect(args[0], Integer.parseInt(args[1]));
+
 				transport.close();
 			}
 		}

@@ -1,5 +1,7 @@
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 import org.apache.thrift.*;
 import org.apache.thrift.server.*;
@@ -13,22 +15,25 @@ import org.apache.curator.retry.*;
 import org.apache.curator.framework.*;
 
 /* NOTES:
-- To implement replication, it's important that each storage node knows if it is the primary or the backup
-    - Can do this in a way similar to how the client figures out the primary
---> I do not believe this can be done at the node startup, as new could be added/taken away at different times
---> To this end, do we do it on getting a get/put request?
---> It should be noted that unlike in A1, where the backend nodes would contact the frontend, the backend nodes are being directly talked to by the clients
---> However, it is only the primary that is being contacted AFAIK
+- The reason we need concurrency control is because each storage node is implemented as a thread pool server
+- This means that any incoming request will be serviced in its own thread -- we could have tons of threads all trying to get and put at the same time!
+- Additionally, each thread needs to make sure after it puts data inside it's local map that it's also sending this data to the backup node!
+--> Spinlocks are needed!
+
+Things to consider:
+- Do we send data to the backup after EACH put request?
 */
 
 
 public class KeyValueHandler implements KeyValueService.Iface {
+    private ReentrantLock lock = new ReentrantLock();
     private Map<String, String> myMap;
     private CuratorFramework curClient;
     private String zkNode;
     private String host;
     private int port;
-    private KeyValueService.Client backupClient;
+    private KeyValueService.Client backupClient = null;
+    private boolean amPrimary = false;
 
     public KeyValueHandler(String host, int port, CuratorFramework curClient, String zkNode) {
         this.host = host;
@@ -47,17 +52,23 @@ public class KeyValueHandler implements KeyValueService.Iface {
             TProtocol protocol = new TBinaryProtocol(transport);
             this.backupClient = new KeyValueService.Client(protocol);
 
-            this.backupClient.replicateData(new ArrayList<String>(), new ArrayList<String>());
+            this.backupClient.replicateData(this.myMap);
+
         } catch (Exception e) {
             System.out.println("ERROR: Failed to set up client to talk to other storage node.");
         }
     }
 
-    public void replicateData(List<String> keys, List<String> values) {
-        System.out.println("Received data replication request from primary.");
+    public void replicateData(Map<String, String> dataMap) {
+        //System.out.println("Received data replication request from primary.");
+        this.myMap = dataMap;
     }
 
     private boolean amIPrimary() throws Exception {
+        if (this.amPrimary) {
+            return true;
+        }
+
         curClient.sync(); // Sync the ZK cluster to make sure we get the newest data (is that needed for this?)
 		List<String> children = this.curClient.getChildren().forPath(this.zkNode);
 
@@ -72,13 +83,16 @@ public class KeyValueHandler implements KeyValueService.Iface {
 	
 				if (strData.equals(String.format("%s:%s", this.host, this.port))) {
                     System.out.println("Am primary!");
+                    this.amPrimary = true;
                     return true;                    
                 }
                 
+                this.amPrimary = false;
                 return false;
 			} catch (KeeperException.NoNodeException e) {
                 // The primary we are trying to reference doesn't exist (it was removed)
                 // Therefore, I (this node) am the only running node, so I must be the primary
+                this.amPrimary = true;
                 return true;
 			}
 		}
@@ -86,6 +100,7 @@ public class KeyValueHandler implements KeyValueService.Iface {
 
     public String get(String key) throws org.apache.thrift.TException
     {	
+        // TODO: Do we need any locking in here?
         try {
             if (amIPrimary()) {
                 String ret = myMap.get(key);
@@ -105,9 +120,16 @@ public class KeyValueHandler implements KeyValueService.Iface {
 
     public void put(String key, String value) throws org.apache.thrift.TException
     {
+        // TODO: Sending data after every request (and locking) is causing TP to tank
+        // --> Maybe we don't do it after every new entry?
         try {
             if (amIPrimary()) {
+                while(!this.lock.tryLock()) { } // Wait until I get a lock
                 myMap.put(key, value);
+                if (this.backupClient != null) {
+                    this.backupClient.replicateData(this.myMap);
+                } 
+                this.lock.unlock();
             } else {
                 throw new TException("ERROR: Not the primary!");
             }
