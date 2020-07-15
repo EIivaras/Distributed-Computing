@@ -91,7 +91,11 @@ public class StorageNode {
 				TProtocol protocol = new TBinaryProtocol(transport);
 				KeyValueService.Client client = new KeyValueService.Client(protocol);
 
-				client.connect(args[0], Integer.parseInt(args[1]));
+				try {
+					client.connect(args[0], Integer.parseInt(args[1]));
+				} catch (Exception e) {
+					// The parent node is still in the znode list but has crashed, so the connection fails
+				}
 
 				transport.close();
 			}

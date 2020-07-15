@@ -14,16 +14,12 @@ import org.apache.curator.*;
 import org.apache.curator.retry.*;
 import org.apache.curator.framework.*;
 
-/* NOTES:
-- The reason we need concurrency control is because each storage node is implemented as a thread pool server
-- This means that any incoming request will be serviced in its own thread -- we could have tons of threads all trying to get and put at the same time!
-- Additionally, each thread needs to make sure after it puts data inside it's local map that it's also sending this data to the backup node!
---> Spinlocks are needed!
+// TODO: Upon killing a primary or backup, client may see a get/put exception
+// --> Are these the expected ones?
 
-Things to consider:
-- Do we send data to the backup after EACH put request?
-*/
+// TODO: TP Hovering around 21/22000 -- need to bump this up higher
 
+// TODO: Need to look a bit further into our primary determination and MAKE SURE it's correct
 
 public class KeyValueHandler implements KeyValueService.Iface {
     private ReentrantLock lock = new ReentrantLock();
@@ -32,8 +28,19 @@ public class KeyValueHandler implements KeyValueService.Iface {
     private String zkNode;
     private String host;
     private int port;
-    private KeyValueService.Client backupClient = null;
     private boolean amPrimary = false;
+    private List<Client> backupClientList = null;
+    private int maxThreads = 64;
+    private boolean connectedBackup = false;
+
+    private class Client {
+        public KeyValueService.Client backupClient;
+        public boolean busy = false;
+
+        public Client(KeyValueService.Client client) {
+            this.backupClient = client;
+        }
+    }
 
     public KeyValueHandler(String host, int port, CuratorFramework curClient, String zkNode) {
         this.host = host;
@@ -45,23 +52,39 @@ public class KeyValueHandler implements KeyValueService.Iface {
 
     public void connect(String host, int port) {
         System.out.println(String.format("Received connection from %s:%d", host, port));
+        while(!this.lock.tryLock()) { }
+        this.connectedBackup = true;
+        this.backupClientList = new ArrayList<Client>();
         try {
-            TSocket sock = new TSocket(host, port);
-            TTransport transport = new TFramedTransport(sock);
-            transport.open();
-            TProtocol protocol = new TBinaryProtocol(transport);
-            this.backupClient = new KeyValueService.Client(protocol);
-
-            this.backupClient.replicateData(this.myMap);
-
+            for (int i = 0; i < maxThreads; i++) {
+                TSocket sock = new TSocket(host, port);
+                TTransport transport = new TFramedTransport(sock);
+                transport.open();
+                TProtocol protocol = new TBinaryProtocol(transport);
+                KeyValueService.Client backupClient = new KeyValueService.Client(protocol);
+                this.backupClientList.add(new Client(backupClient));
+    
+                if (i == 0) {
+                    backupClient.replicateData(this.myMap);
+                }
+            }
         } catch (Exception e) {
             System.out.println("ERROR: Failed to set up client to talk to other storage node.");
         }
+        this.lock.unlock();
     }
 
     public void replicateData(Map<String, String> dataMap) {
         //System.out.println("Received data replication request from primary.");
+        while(!this.lock.tryLock()) { }
         this.myMap = dataMap;
+        this.lock.unlock();
+    }
+
+    public void replicatePut(String key, String value) {
+        while(!this.lock.tryLock()) { }
+        this.myMap.put(key, value);
+        this.lock.unlock();
     }
 
     private boolean amIPrimary() throws Exception {
@@ -100,15 +123,18 @@ public class KeyValueHandler implements KeyValueService.Iface {
 
     public String get(String key) throws org.apache.thrift.TException
     {	
-        // TODO: Do we need any locking in here?
+        // TODO: Do we /NEED/ locking here?
         try {
             if (amIPrimary()) {
+                while (!this.lock.tryLock()) {}
                 String ret = myMap.get(key);
+                this.lock.unlock();
                 if (ret == null)
                     return "";
                 else
                     return ret;
             } else {
+                System.out.println("Throwing not the primary exception!");
                 throw new TException("ERROR: Not the primary!");
             }
         } catch (Exception e) {
@@ -124,13 +150,33 @@ public class KeyValueHandler implements KeyValueService.Iface {
         // --> Maybe we don't do it after every new entry?
         try {
             if (amIPrimary()) {
-                while(!this.lock.tryLock()) { } // Wait until I get a lock
-                myMap.put(key, value);
-                if (this.backupClient != null) {
-                    this.backupClient.replicateData(this.myMap);
-                } 
-                this.lock.unlock();
+                if (this.connectedBackup) {
+                    while(!this.lock.tryLock()) { } // Wait until I get a lock
+                    myMap.put(key, value);
+                    
+                    Client client = null;
+                    for (Client backupClient : backupClientList) {
+                        if (!backupClient.busy) {
+                            client = backupClient;
+                            client.busy = true;
+                            break;
+                        }
+                    } 
+                    this.lock.unlock();
+                    try {
+                        client.backupClient.replicatePut(key, value);
+                    } catch (Exception e) {
+                        // Backup has died
+                        this.connectedBackup = false;
+                    }
+                    client.busy = false;
+                } else {
+                    while(!this.lock.tryLock()) { } // Wait until I get a lock
+                    myMap.put(key, value);
+                    this.lock.unlock();
+                }
             } else {
+                System.out.println("Throwing not the primary exception!");
                 throw new TException("ERROR: Not the primary!");
             }
         } catch (Exception e) {
