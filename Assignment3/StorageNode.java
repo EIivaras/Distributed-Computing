@@ -58,7 +58,7 @@ public class StorageNode {
 			}
 		}).start();
 
-		// TODO: create an ephemeral node in ZooKeeper
+		// Create an ephemeral node in ZooKeeper
 		// Child znode must store, as its data payload, a host:port string denoting the address of the server process
 		
 		String payload = String.format("%s:%s", args[0], args[1]);
@@ -72,31 +72,33 @@ public class StorageNode {
 
 		curClient.sync();
 		List<String> children = curClient.getChildren().forPath(args[3]);
+		Collections.sort(children);
 
 		for (String child : children) {
 			byte[] data = curClient.getData().forPath(args[3] + "/" + child);
 			String strData = new String(data);
 
-			// If the child of the parent I just got is NOT equal to me
-			if (!strData.equals(payload)) {
-				String[] otherSplitData = strData.split(":");
-				String otherHostName = otherSplitData[0];
-				Integer otherPort = Integer.parseInt(otherSplitData[1]);
+			// all child nodes after me (in lexicographic order) cannot be the primary 
+			if (strData.equals(payload)) break;
+			// otherwise, I am the backup and child is the primary (if it hasn't crashed)
+			String[] otherSplitData = strData.split(":");
+			String otherHostName = otherSplitData[0];
+			Integer otherPort = Integer.parseInt(otherSplitData[1]);
 
-				TSocket sock = new TSocket(otherHostName, otherPort);
-				TTransport transport = new TFramedTransport(sock);
-				transport.open();
-				TProtocol protocol = new TBinaryProtocol(transport);
-				KeyValueService.Client client = new KeyValueService.Client(protocol);
+			TSocket sock = new TSocket(otherHostName, otherPort);
+			TTransport transport = new TFramedTransport(sock);
+			transport.open();
+			TProtocol protocol = new TBinaryProtocol(transport);
+			KeyValueService.Client client = new KeyValueService.Client(protocol);
 
-				try {
-					client.connect(args[0], Integer.parseInt(args[1]));
-				} catch (Exception e) {
-					// The parent node is still in the znode list but has crashed, so the connection fails
-				}
-
-				transport.close();
+			try {
+				// connect the primary to me (new backup with host name args[0] and port # args[1])
+				client.connect(args[0], Integer.parseInt(args[1]));
+			} catch (Exception e) {
+				// The child node is still in the znode list but has crashed, so the connection fails
 			}
+
+			transport.close();
 		}
 	}
 }

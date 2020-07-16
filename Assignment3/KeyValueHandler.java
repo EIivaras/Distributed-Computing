@@ -1,17 +1,12 @@
 import java.util.*;
 import java.util.concurrent.*;
-import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 import org.apache.thrift.*;
-import org.apache.thrift.server.*;
 import org.apache.thrift.transport.*;
 import org.apache.thrift.protocol.*;
 
 import org.apache.zookeeper.*;
-import org.apache.zookeeper.data.*;
-import org.apache.curator.*;
-import org.apache.curator.retry.*;
 import org.apache.curator.framework.*;
 
 // TODO: Upon killing a primary or backup, client may see a get/put exception
