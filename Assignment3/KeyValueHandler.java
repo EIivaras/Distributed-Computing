@@ -19,6 +19,11 @@ import org.apache.curator.framework.*;
 public class KeyValueHandler implements KeyValueService.Iface {
     private ReentrantLock lock = new ReentrantLock();
     private Map<String, String> myMap;
+    private CuratorFramework curClient;
+    private String zkNode;
+    private String host;
+    private int port;
+    private boolean amPrimary = false;
     private List<Client> backupClientList = null;
     private int maxThreads = 64;
     private boolean connectedBackup = false;
@@ -33,6 +38,10 @@ public class KeyValueHandler implements KeyValueService.Iface {
     }
 
     public KeyValueHandler(String host, int port, CuratorFramework curClient, String zkNode) {
+        this.host = host;
+        this.port = port;
+        this.curClient = curClient;
+        this.zkNode = zkNode;
         myMap = new ConcurrentHashMap<String, String>();	
     }
 
@@ -74,7 +83,37 @@ public class KeyValueHandler implements KeyValueService.Iface {
     }
 
     private boolean amIPrimary() throws Exception {
-        return !this.backupClientList.isEmpty();
+        if (this.amPrimary) {
+            return true;
+        }
+
+        curClient.sync(); // Sync the ZK cluster to make sure we get the newest data (is that needed for this?)
+		List<String> children = this.curClient.getChildren().forPath(this.zkNode);
+
+		if (children.size() == 0) {
+			// Somehow there isn't a child, even though we just created one
+            throw new Exception("ERROR: No children of parent znode found.");
+		} else {
+			Collections.sort(children);
+			try {
+				byte[] data = this.curClient.getData().forPath(this.zkNode + "/" + children.get(0));
+				String strData = new String(data);
+	
+				if (strData.equals(String.format("%s:%s", this.host, this.port))) {
+                    System.out.println("Am primary!");
+                    this.amPrimary = true;
+                    return true;                    
+                }
+                
+                this.amPrimary = false;
+                return false;
+			} catch (KeeperException.NoNodeException e) {
+                // The primary we are trying to reference doesn't exist (it was removed)
+                // Therefore, I (this node) am the only running node, so I must be the primary
+                this.amPrimary = true;
+                return true;
+			}
+		}
     }
 
     public String get(String key) throws org.apache.thrift.TException
