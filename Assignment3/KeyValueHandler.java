@@ -54,7 +54,6 @@ public class KeyValueHandler implements KeyValueService.Iface {
         this.backupClientList = new ArrayList<Client>();
         try {
             for (int i = 0; i < maxThreads; i++) {
-                // TODO: use different port numbers below? like (port + i) for ith socket
                 TSocket sock = new TSocket(host, port);
                 TTransport transport = new TFramedTransport(sock);
                 transport.open();
