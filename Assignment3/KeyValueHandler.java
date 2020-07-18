@@ -27,7 +27,7 @@ public class KeyValueHandler implements KeyValueService.Iface {
     private int port;
     private boolean amPrimary = false;
     private List<Client> backupClientList = null;
-    private int maxThreads = 64;
+    private int maxThreads = 8;
     private boolean connectedBackup = false;
 
     private class Client {
@@ -44,7 +44,10 @@ public class KeyValueHandler implements KeyValueService.Iface {
         this.port = port;
         this.curClient = curClient;
         this.zkNode = zkNode;
-        myMap = new ConcurrentHashMap<String, String>();	
+        // // ConcurrentHashMap arguments: initial size, load factor (leave at 0.75),
+        // //   concurrency level (determines how many writes can happen in parallel, could set to half number of A3Client threads, since there is 50/50 chance of each thread reading or writing)
+        // myMap = new ConcurrentHashMap<String, String>(500,(float)0.75,4);
+        myMap = new HashMap<String, String>();	
     }
 
     public void connect(String host, int port) {
@@ -121,6 +124,7 @@ public class KeyValueHandler implements KeyValueService.Iface {
     public String get(String key) throws org.apache.thrift.TException
     {	
         // TODO: Do we /NEED/ locking here?
+        // Found that it doesn't cause linearizability violation (could make piazza post)
         try {
             if (amIPrimary()) {
                 //while (!this.lock.tryLock()) {}
