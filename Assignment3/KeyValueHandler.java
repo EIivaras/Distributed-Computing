@@ -16,6 +16,8 @@ import org.apache.curator.framework.*;
 
 // TODO: Need to look a bit further into our primary determination and MAKE SURE it's correct
 
+// TODO: After going back and forth crashing the primary we get a "connection reset" exception
+
 public class KeyValueHandler implements KeyValueService.Iface {
     private ReentrantLock lock = new ReentrantLock();
     private Map<String, String> myMap;
@@ -121,9 +123,9 @@ public class KeyValueHandler implements KeyValueService.Iface {
         // TODO: Do we /NEED/ locking here?
         try {
             if (amIPrimary()) {
-                while (!this.lock.tryLock()) {}
+                //while (!this.lock.tryLock()) {}
                 String ret = myMap.get(key);
-                this.lock.unlock();
+                //this.lock.unlock();
                 if (ret == null)
                     return "";
                 else
