@@ -9,14 +9,9 @@ import org.apache.thrift.protocol.*;
 import org.apache.zookeeper.*;
 import org.apache.curator.framework.*;
 
-// TODO: Upon killing a primary or backup, client may see a get/put exception
-// --> Are these the expected ones?
-
-// TODO: TP Hovering around 21/22000 -- need to bump this up higher
-
-// TODO: Need to look a bit further into our primary determination and MAKE SURE it's correct
-
 // TODO: After going back and forth crashing the primary we get a "connection reset" exception
+// This happens on the BACKUP after the PRIMARY is killed
+// --> This sounds like the backup trying to ACK the primary's message but failing to b/c the connection is reset -- there is NO WAY to catch this though!
 
 public class KeyValueHandler implements KeyValueService.Iface {
     private ReentrantLock lock = new ReentrantLock();
@@ -70,15 +65,27 @@ public class KeyValueHandler implements KeyValueService.Iface {
             this.connectedBackup = true;
         } catch (Exception e) {
             System.out.println("ERROR: Failed to set up client to talk to other storage node.");
+        } finally {
+            this.lock.unlock();
         }
-        this.lock.unlock();
     }
 
     public void replicateData(Map<String, String> dataMap) {
         //System.out.println("Received data replication request from primary.");
         while(!this.lock.tryLock()) { }
+        Map<String, String> tempMap = this.myMap;
         this.myMap = dataMap;
+
+        // Covers for issues where a put request gets to the backup before the replication request does
+        if (tempMap.size() > 0) {
+            System.out.println("Put request received before replication!");
+            for(Map.Entry<String, String> entry : tempMap.entrySet()) {
+                this.myMap.put(entry.getKey(), entry.getValue());
+            }
+        }
+
         this.lock.unlock();
+        System.out.println("Data replication complete");
     }
 
     public void replicatePut(String key, String value) {
@@ -110,14 +117,21 @@ public class KeyValueHandler implements KeyValueService.Iface {
                     return true;                    
                 }
                 
+                System.out.println("Not the primary");
                 this.amPrimary = false;
                 return false;
 			} catch (KeeperException.NoNodeException e) {
                 // The primary we are trying to reference doesn't exist (it was removed)
                 // Therefore, I (this node) am the only running node, so I must be the primary
+                System.out.println("Primary down, I am now the primary!");
                 this.amPrimary = true;
                 return true;
-			}
+			} catch (Exception e) {
+                System.out.println("Exception caught:");
+                System.out.println(e.getMessage());
+                this.amPrimary = true;
+                return true;
+            }
 		}
     }
 
@@ -168,6 +182,8 @@ public class KeyValueHandler implements KeyValueService.Iface {
                         client.backupClient.replicatePut(key, value);
                     } catch (Exception e) {
                         // Backup has died
+                        System.out.println("Exception! Backup dead when trying to send data:");
+                        System.out.println(e.getMessage());
                         this.connectedBackup = false;
                     }
                     client.busy = false;
