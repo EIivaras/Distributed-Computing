@@ -60,10 +60,8 @@ public class StorageNode {
 
 		// Create an ephemeral node in ZooKeeper
 		// Child znode must store, as its data payload, a host:port string denoting the address of the server process
-		
 		String payload = String.format("%s:%s", args[0], args[1]);
 		byte[] payloadInBytes = payload.getBytes();
-
 		// args[3] = /zwalford
 		// NOTE: When a child node is created, it's reference is stored in string form as "child000000000[someNumber]"
 		curClient.create()
@@ -73,7 +71,24 @@ public class StorageNode {
 		curClient.sync();
 		List<String> children = curClient.getChildren().forPath(args[3]);
 		Collections.sort(children);
+		
+		// Count duplicate znodes and remove the ones at the front (expired znodes, queued to be deleted)
+		List<String> dupNodes = new ArrayList<>();
+		for (String child : children) {
+			byte[] data = curClient.getData().forPath(args[3] + "/" + child);
+			String strData = new String(data);
+			if (strData.equals(payload)) dupNodes.add(child);
+		}
+		for (int i = 0; i < dupNodes.size() - 1; ++i) {
+			curClient.delete().forPath(args[3] + "/" + dupNodes.get(i));
+		}
+		dupNodes.clear();
 
+		curClient.sync();
+		children = curClient.getChildren().forPath(args[3]);
+		Collections.sort(children);
+
+		// Form connection between primary and backup StorageNodes
 		for (String child : children) {
 			byte[] data = curClient.getData().forPath(args[3] + "/" + child);
 			String strData = new String(data);
