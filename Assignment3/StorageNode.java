@@ -64,25 +64,26 @@ public class StorageNode {
 		byte[] payloadInBytes = payload.getBytes();
 		// args[3] = /zwalford
 		// NOTE: When a child node is created, it's reference is stored in string form as "child000000000[someNumber]"
-		curClient.create()
-				.withMode(CreateMode.EPHEMERAL_SEQUENTIAL)
-				.forPath(args[3] + "/child", payloadInBytes);
+		String thisZNodePath = curClient.create()
+								.withMode(CreateMode.EPHEMERAL_SEQUENTIAL)
+								.forPath(args[3] + "/child", payloadInBytes);
+		// System.out.println("thisZnodePath: " + thisZNodePath);
 
 		curClient.sync();
 		List<String> children = curClient.getChildren().forPath(args[3]);
 		Collections.sort(children);
 		
-		// Count duplicate znodes and remove the ones at the front (expired znodes, queued to be deleted)
-		List<String> dupNodes = new ArrayList<>();
+		// Find duplicate znodes and remove them (expired znodes, queued to be deleted)
 		for (String child : children) {
 			byte[] data = curClient.getData().forPath(args[3] + "/" + child);
 			String strData = new String(data);
-			if (strData.equals(payload)) dupNodes.add(child);
+			String childZNodePath = args[3] + "/" + child;
+
+			if (strData.equals(payload) && !childZNodePath.equals(thisZNodePath)) {
+				// System.out.println("duplicateZNodePath: " + childZNodePath);
+				curClient.delete().forPath(childZNodePath);
+			} 
 		}
-		for (int i = 0; i < dupNodes.size() - 1; ++i) {
-			curClient.delete().forPath(args[3] + "/" + dupNodes.get(i));
-		}
-		dupNodes.clear();
 
 		curClient.sync();
 		children = curClient.getChildren().forPath(args[3]);
@@ -90,6 +91,7 @@ public class StorageNode {
 
 		// Form connection between primary and backup StorageNodes
 		for (String child : children) {
+			// System.out.println("child: " + child);
 			byte[] data = curClient.getData().forPath(args[3] + "/" + child);
 			String strData = new String(data);
 
