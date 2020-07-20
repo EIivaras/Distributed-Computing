@@ -178,7 +178,7 @@ public class KeyValueHandler implements KeyValueService.Iface, CuratorWatcher {
                         }
                     } 
                     this.lock.unlock();
-
+                    
                     try {
                         client.backupClient.replicatePut(key, value);
                     } catch (Exception e) {
