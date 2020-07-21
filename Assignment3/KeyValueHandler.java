@@ -17,6 +17,7 @@ import org.apache.curator.framework.api.*;
 public class KeyValueHandler implements KeyValueService.Iface, CuratorWatcher {
     private ReentrantLock lock = new ReentrantLock(true);
     private Map<String, String> myMap;
+    private ConcurrentHashMap<String, ReentrantLock> lockMap;
     private CuratorFramework curClient;
     private String zkNode;
     private String host;
@@ -48,7 +49,8 @@ public class KeyValueHandler implements KeyValueService.Iface, CuratorWatcher {
         // // ConcurrentHashMap arguments: initial size, load factor (leave at 0.75),
         // //   concurrency level (determines how many writes can happen in parallel, could set to half number of A3Client threads, since there is 50/50 chance of each thread reading or writing)
         // myMap = new ConcurrentHashMap<String, String>(500,(float)0.75,4);
-        myMap = new HashMap<String, String>();	
+        this.myMap = new HashMap<String, String>();	
+        this.lockMap = new ConcurrentHashMap<String, ReentrantLock>();
 
         this.amPrimary = this.amIPrimary();
     }
@@ -142,7 +144,7 @@ public class KeyValueHandler implements KeyValueService.Iface, CuratorWatcher {
         try {
             if (this.amPrimary) {
                 while (!this.lock.tryLock()) {}
-                String ret = myMap.get(key);
+                String ret = this.myMap.get(key);
                 this.lock.unlock();
                 if (ret == null)
                     return "";
@@ -167,10 +169,11 @@ public class KeyValueHandler implements KeyValueService.Iface, CuratorWatcher {
             if (this.amPrimary) {
                 // TODO: Look into putting these if statements WITHIN the lock instead of outside of it, which would completely prevent the concurrency isseu
                 // It's technically possible that it could still happen, although the chance is extremely slim!
+
+                while(!this.lock.tryLock()) { } // Wait until I get a lock
+                this.myMap.put(key, value);
+                
                 if (this.connectedBackup) {
-                    while(!this.lock.tryLock()) { } // Wait until I get a lock
-                    myMap.put(key, value);
-                    
                     Client client = null;
                     for (Client backupClient : backupClientList) {
                         if (!backupClient.busy) {
@@ -179,8 +182,14 @@ public class KeyValueHandler implements KeyValueService.Iface, CuratorWatcher {
                             break;
                         }
                     } 
+
+                    if (!this.lockMap.containsKey(key)) {
+                        this.lockMap.put(key, new ReentrantLock(true));
+                    }
+
                     this.lock.unlock();
 
+                    while (!this.lockMap.get(key).tryLock()) { }
                     try {
                         client.backupClient.replicatePut(key, value);
                     } catch (Exception e) {
@@ -189,11 +198,10 @@ public class KeyValueHandler implements KeyValueService.Iface, CuratorWatcher {
                         System.out.println(e.getMessage());
                         this.connectedBackup = false;
                     } finally {
+                        this.lockMap.get(key).unlock();
                         client.busy = false;
                     }
                 } else {
-                    while(!this.lock.tryLock()) { } // Wait until I get a lock
-                    myMap.put(key, value);
                     this.lock.unlock();
                 }
             } else {
