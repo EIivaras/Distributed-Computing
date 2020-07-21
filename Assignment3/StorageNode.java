@@ -32,7 +32,7 @@ public class StorageNode {
 			.connectString(args[2])
 			.retryPolicy(new RetryNTimes(10, 1000))
 			.connectionTimeoutMs(1000)
-			.sessionTimeoutMs(250)
+			.sessionTimeoutMs(500)
 			.build();
 
 		curClient.start();
