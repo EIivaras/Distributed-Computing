@@ -56,6 +56,7 @@ public class KeyValueHandler implements KeyValueService.Iface, CuratorWatcher {
     public void connect(String host, int port) {
         System.out.println(String.format("Received connection from %s:%d", host, port));
         while(!this.lock.tryLock()) { }
+        this.connectedBackup = true;
         this.backupClientList = new ArrayList<Client>();
         try {
             for (int i = 0; i < maxThreads; i++) {
@@ -70,7 +71,6 @@ public class KeyValueHandler implements KeyValueService.Iface, CuratorWatcher {
                     backupClient.replicateData(this.myMap);
                 }
             }
-            this.connectedBackup = true;
         } catch (Exception e) {
             System.out.println("ERROR: Failed to set up client to talk to other storage node.");
         } finally {
@@ -165,6 +165,8 @@ public class KeyValueHandler implements KeyValueService.Iface, CuratorWatcher {
         // --> Maybe we don't do it after every new entry?
         try {
             if (this.amPrimary) {
+                // TODO: Look into putting these if statements WITHIN the lock instead of outside of it, which would completely prevent the concurrency isseu
+                // It's technically possible that it could still happen, although the chance is extremely slim!
                 if (this.connectedBackup) {
                     while(!this.lock.tryLock()) { } // Wait until I get a lock
                     myMap.put(key, value);
@@ -178,7 +180,7 @@ public class KeyValueHandler implements KeyValueService.Iface, CuratorWatcher {
                         }
                     } 
                     this.lock.unlock();
-                    
+
                     try {
                         client.backupClient.replicatePut(key, value);
                     } catch (Exception e) {
