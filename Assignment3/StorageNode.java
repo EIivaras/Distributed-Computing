@@ -1,4 +1,3 @@
-import java.io.*;
 import java.util.*;
 
 import org.apache.thrift.*;
@@ -7,11 +6,8 @@ import org.apache.thrift.transport.*;
 import org.apache.thrift.protocol.*;
 
 import org.apache.zookeeper.*;
-import org.apache.zookeeper.data.*;
-import org.apache.curator.*;
 import org.apache.curator.retry.*;
 import org.apache.curator.framework.*;
-import org.apache.curator.utils.*;
 
 import org.apache.log4j.*;
 
@@ -32,7 +28,7 @@ public class StorageNode {
 			.connectString(args[2])
 			.retryPolicy(new RetryNTimes(10, 1000))
 			.connectionTimeoutMs(1000)
-			.sessionTimeoutMs(10000)
+			.sessionTimeoutMs(350)
 			.build();
 
 		curClient.start();
@@ -71,7 +67,6 @@ public class StorageNode {
 
 		curClient.sync();
 		List<String> children = curClient.getChildren().forPath(args[3]);
-		Collections.sort(children);
 		
 		// Find duplicate znodes and remove them (expired znodes, queued to be deleted)
 		for (String child : children) {
@@ -89,33 +84,38 @@ public class StorageNode {
 		children = curClient.getChildren().forPath(args[3]);
 		Collections.sort(children);
 
+		TTransport transport = null;
+
 		// Form connection between primary and backup StorageNodes
 		for (String child : children) {
-			// System.out.println("child: " + child);
-			byte[] data = curClient.getData().forPath(args[3] + "/" + child);
-			String strData = new String(data);
-
-			// all child nodes after me (in lexicographic order) cannot be the primary 
-			if (strData.equals(payload)) break;
-			// otherwise, I am the backup and child is the primary (if it hasn't crashed)
-			String[] otherSplitData = strData.split(":");
-			String otherHostName = otherSplitData[0];
-			Integer otherPort = Integer.parseInt(otherSplitData[1]);
-
-			TSocket sock = new TSocket(otherHostName, otherPort);
-			TTransport transport = new TFramedTransport(sock);
-			transport.open();
-			TProtocol protocol = new TBinaryProtocol(transport);
-			KeyValueService.Client client = new KeyValueService.Client(protocol);
-
 			try {
+				byte[] data = curClient.getData().forPath(args[3] + "/" + child);
+				String strData = new String(data);
+
+				// all child nodes after me (in lexicographic order) cannot be the primary 
+				if (strData.equals(payload)) break;
+				// otherwise, I am the backup and child is the primary (if it hasn't crashed)
+				String[] otherSplitData = strData.split(":");
+				String otherHostName = otherSplitData[0];
+				Integer otherPort = Integer.parseInt(otherSplitData[1]);
+
+				TSocket sock = new TSocket(otherHostName, otherPort);
+				transport = new TFramedTransport(sock);
+				transport.open();
+				TProtocol protocol = new TBinaryProtocol(transport);
+				KeyValueService.Client client = new KeyValueService.Client(protocol);
+
+
 				// connect the primary to me (new backup with host name args[0] and port # args[1])
 				client.connect(args[0], Integer.parseInt(args[1]));
+
+				transport.close();
 			} catch (Exception e) {
 				// The child node is still in the znode list but has crashed, so the connection fails
+				if (!transport.equals(null)) {
+					transport.close();
+				}
 			}
-
-			transport.close();
 		}
 	}
 }

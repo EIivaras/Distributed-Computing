@@ -125,3 +125,6 @@ Final Notes:
 
 - The server nodes we'll be running are created from "StorageNode.java"
     - All server nodes are capable of being the primary, so they need code to figure out which one they are
+
+# KILLING PROCESSES #
+--> kill -9 $(pgrep -u userid java)
