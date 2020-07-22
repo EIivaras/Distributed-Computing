@@ -70,24 +70,7 @@ public class KeyValueHandler implements KeyValueService.Iface, CuratorWatcher {
                 this.backupClientList.add(new Client(backupClient));
     
                 if (i == 0) {
-                    try {
-                        backupClient.replicateData(this.myMap);
-                    } catch (TTransportException e) {
-                        // restart the transport, to clear broken pipe
-                        transport.close();
-                        transport.open();
-                        // map was probably too large to send over RPC
-                        // split map into two halves and retry
-                        Map<String,String> m1 = new HashMap<>();
-                        Map<String,String> m2 = new HashMap<>();
-                        int j = 0;
-                        for (Map.Entry<String, String> entry : this.myMap.entrySet()) {
-                            (j++ % 2 == 0 ? m1 : m2).put(entry.getKey(), entry.getValue());
-                        } 
-                        backupClient.replicateData(m1);
-                        backupClient.replicateData(m2);
-                        m1 = null; m2 = null;
-                    }
+                    backupClient.replicateData(this.myMap);
                 }
             }
         } catch (Exception e) {
@@ -97,22 +80,14 @@ public class KeyValueHandler implements KeyValueService.Iface, CuratorWatcher {
             this.lock.unlock();
         }
     }
-    
+
     public void replicateData(Map<String, String> dataMap) {
         System.out.println("Received data replication request from primary.");
         while(!this.lock.tryLock()) { }
-
-        if (this.myMap.size() > 0) {
-            // second half of the map to be replicated
-            for(Map.Entry<String, String> entry : dataMap.entrySet()) {
-                this.myMap.put(entry.getKey(), entry.getValue());
-            }
-            System.out.println("Data replication complete");
-        } else {
-            this.myMap = dataMap;
-        }
-
+        Map<String, String> tempMap = new HashMap<String, String>(this.myMap);
+        this.myMap = dataMap;
         this.lock.unlock();
+        System.out.println("Data replication complete");
     }
 
     public void replicatePut(String key, String value) {
