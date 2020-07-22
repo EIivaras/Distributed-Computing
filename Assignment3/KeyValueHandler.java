@@ -84,7 +84,6 @@ public class KeyValueHandler implements KeyValueService.Iface, CuratorWatcher {
     public void replicateData(Map<String, String> dataMap) {
         System.out.println("Received data replication request from primary.");
         while(!this.lock.tryLock()) { }
-        Map<String, String> tempMap = new HashMap<String, String>(this.myMap);
         this.myMap = dataMap;
         this.lock.unlock();
         System.out.println("Data replication complete");
