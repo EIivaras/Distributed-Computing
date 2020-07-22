@@ -28,7 +28,7 @@ public class StorageNode {
 			.connectString(args[2])
 			.retryPolicy(new RetryNTimes(10, 1000))
 			.connectionTimeoutMs(1000)
-			.sessionTimeoutMs(500)
+			.sessionTimeoutMs(1000)
 			.build();
 
 		curClient.start();
