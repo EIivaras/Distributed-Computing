@@ -75,6 +75,7 @@ public class KeyValueHandler implements KeyValueService.Iface, CuratorWatcher {
             }
         } catch (Exception e) {
             System.out.println("ERROR: Failed to set up client to talk to other storage node.");
+            System.out.println(e.getMessage());
         } finally {
             this.lock.unlock();
         }

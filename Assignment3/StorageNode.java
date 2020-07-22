@@ -42,7 +42,7 @@ public class StorageNode {
 		TServerSocket socket = new TServerSocket(Integer.parseInt(args[1]));
 		TThreadPoolServer.Args sargs = new TThreadPoolServer.Args(socket);
 		sargs.protocolFactory(new TBinaryProtocol.Factory());
-		sargs.transportFactory(new TFramedTransport.Factory());
+		sargs.transportFactory(new TFramedTransport.Factory(2147483647));
 		sargs.processorFactory(new TProcessorFactory(processor));
 		sargs.maxWorkerThreads(64);
 		TServer server = new TThreadPoolServer(sargs);
