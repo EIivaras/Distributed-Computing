@@ -37,7 +37,7 @@ public class KeyValueHandler implements KeyValueService.Iface, CuratorWatcher {
     }
 
     public void process (WatchedEvent event) {
-        System.out.println("ZooKeeper event " + event);
+        // System.out.println("ZooKeeper event " + event);
         this.amPrimary = this.amIPrimary();
     }
 
@@ -56,7 +56,7 @@ public class KeyValueHandler implements KeyValueService.Iface, CuratorWatcher {
     }
 
     public void connect(String host, int port) {
-        System.out.println(String.format("Received connection from %s:%d", host, port));
+        // System.out.println(String.format("Received connection from %s:%d", host, port));
         while(!this.lock.tryLock()) { }
         this.connectedBackup = true;
         this.backupClientList = new ArrayList<Client>();
@@ -82,11 +82,11 @@ public class KeyValueHandler implements KeyValueService.Iface, CuratorWatcher {
     }
 
     public void replicateData(Map<String, String> dataMap) {
-        System.out.println("Received data replication request from primary.");
+        // System.out.println("Received data replication request from primary.");
         while(!this.lock.tryLock()) { }
         this.myMap = dataMap;
         this.lock.unlock();
-        System.out.println("Data replication complete");
+        // System.out.println("Data replication complete");
     }
 
     public void replicatePut(String key, String value) {
@@ -110,20 +110,20 @@ public class KeyValueHandler implements KeyValueService.Iface, CuratorWatcher {
             String strData = new String(data);
 
             if (strData.equals(String.format("%s:%s", this.host, this.port))) {
-                System.out.println("Am primary!");
+                // System.out.println("Am primary!");
                 return true;                    
             }
             
-            System.out.println("Not the primary");
+            // System.out.println("Not the primary");
             return false;
         } catch (KeeperException.NoNodeException e) {
             // The primary we are trying to reference doesn't exist (it was removed)
             // Therefore, I (this node) am the only running node, so I must be the primary
-            System.out.println("Primary down, I am now the primary!");
+            // System.out.println("Primary down, I am now the primary!");
             return true;
         } catch (Exception e) {
-            System.out.println("Exception caught:");
-            System.out.println(e.getMessage());
+            // System.out.println("Exception caught:");
+            // System.out.println(e.getMessage());
             return true;
         }
     }
@@ -142,12 +142,12 @@ public class KeyValueHandler implements KeyValueService.Iface, CuratorWatcher {
                 else
                     return ret;
             } else {
-                System.out.println("Throwing not the primary exception!");
+                // System.out.println("Throwing not the primary exception!");
                 throw new TException("ERROR: Not the primary!");
             }
         } catch (Exception e) {
-            System.out.println("Exception!");
-            System.out.println(e.getMessage());
+            // System.out.println("Exception!");
+            // System.out.println(e.getMessage());
         }
         return "";
     }
@@ -185,8 +185,8 @@ public class KeyValueHandler implements KeyValueService.Iface, CuratorWatcher {
                         client.backupClient.replicatePut(key, value);
                     } catch (Exception e) {
                         // Backup has died
-                        System.out.println("Exception! Backup dead when trying to send data:");
-                        System.out.println(e.getMessage());
+                        // System.out.println("Exception! Backup dead when trying to send data:");
+                        // System.out.println(e.getMessage());
                         this.connectedBackup = false;
                     } finally {
                         this.lockMap.get(key).unlock();
@@ -196,12 +196,12 @@ public class KeyValueHandler implements KeyValueService.Iface, CuratorWatcher {
                     this.lock.unlock();
                 }
             } else {
-                System.out.println("Throwing not the primary exception!");
+                // System.out.println("Throwing not the primary exception!");
                 throw new TException("ERROR: Not the primary!");
             }
         } catch (Exception e) {
-            System.out.println("Exception!");
-            System.out.println(e.getMessage());
+            // System.out.println("Exception!");
+            // System.out.println(e.getMessage());
         }
     }
 }
