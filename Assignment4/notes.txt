@@ -1,0 +1,114 @@
+Assignment 4
+
+Overview
+-In this assignment, you will implement a simple real-time stream processing application using the Kafka Streams API
+-Your goal is to complete the provided code so that it meets the fxnal and non-fxnal requirements
+-ZooKeeper & Kafka are provided on manta.uwaterloo.ca on the default ports (2181 and 9092 respectively).
+	-ZK is provided only b/c it is needed by Kafka -- you should NOT be interacting with ZK directly in your java code
+
+Inputs and outputs
+-Your Kafka app will consume input records from two topics, and will produce output records to a third topic
+-the names of the topic will be provided at runtime as command line args in your program
+-The inputs are specifically "student-$USER" & "classroom-$USER" -- they are unique per student
+
+Inputs
+-The student topic provides info on students and their whereabouts
+-Each msg is a string key-value pair of the following form:
+	-Student_ID,Room_ID
+-The message means that a student has entered the specified room
+-The classroom topic provides info on classrooms and their capacity
+-Each msg is a string key-value pair of the following form:
+	-Room_ID,max_capacity
+-The key and value are separated by one comma with NO whitespace around it
+-Note for classrooms:
+	-The capacities of rooms are given in a well-defined order by the grading script
+	-The capacity of a room can increase and decrease in subsequent messages
+		-Ex/
+		-RoomB,10
+		-RoomB,15
+	-If not specified, the capacity of a room is unlimited
+-Note for students:
+	-A student can be in at most one room at any given time
+		-Ex/
+		-Student100,RoomB
+		-Student100,RoomA
+		-Implies that Student100 has left room B and is now in room A
+	-A student can enter a room that is already at capacity or above capacity
+		-Rooms can overfill
+
+--> The point of this assignment is to build an application that can detect rooms that are over capacity and also detect the event when the occupancy of a room returns to a safe level (== capacity)
+
+Output
+-The goal of the application is to output the names of rooms for which the current occupancy exceeds the maximum capcity, along with some additional information
+-For each such room, the application should output a string key-value pair of the following form:
+	-Room_ID,current_occupancy
+	-This will happen any time a student enters or leaves a room, and the resulting # of students in the room is still greater than capacity
+-If the occupancy of a room is decreased subsequently to a value equal to the capacity, or if the capacity is increased to a value greater than or equal to the occupancy, the application should output a string key-value pair of the following form:
+	-Room_ID,OK
+	-This should only be output ONCE for the FIRST time that the room has a # of students <= capacity
+	--> How to ensure this happens? Need some form of a stateful operator to remember the previous message.
+
+Requirements
+-The application hsould be configured so that each input message is consumed and processed in around ONE SECOND OR LESS
+	-For ex, if the occupancy of a room increases beyond the maximum capacity then the corresponding output record should be committed to the output topic within around one second
+	-Not that difficult, key to making this work is to disable buffering of the outputs which would delay them unnecessarily (already done for us)
+	-Make sure you don't write code that overwrites this behaviour
+-The implementation must tolerate crash failures
+	-One of the cases tested by the grading script will crash your application after publishing several messages to the input topics, then restart the application and publish more messages to the input topics
+	-Your stream application must resume processing and publish msgs to the output topic as if the crash failure did not occur
+	--> Should be done using Kafka State Stores -- when you are counting, you can configure a state store and make count operators stateful
+		-An ex of this was given in the lecture module on Kafka in regards to real-time word count
+	-Pretty straight forward in Kafka, mostly requires configuring a state store for a particular operator
+
+Notes
+-The correct output depends not only on the msgs supplied in the input streams, but also on the order in which student and classroom messages are processed
+	-The grading script will only publish to one topic at a time, in a single thread
+	-It will wait at least 2 seconds before switching topics
+	-It may switch topics back and forth several times
+-If a student enters a room for which there is no room data, then assume that the room's capacity is unlimited
+	-If, at a later time, a distinct capacity is applied and the room is over capacity, you should output a message that says so
+
+Packaging and Submission
+-Please use ONLY the Kafka Stream API and no others
+-Solution goes in A4Application.java -- you can make additional files but the solution is quite short, so you can get away with putting everything in one file
+-Anything in the Kafka libs is fair game in terms of libraries
+
+Grading
+-The entire 8% of this assignment is for correctness
+	-Assuming you are responding to inputs in roughly one second's time
+
+Hints
+-Creating and resetting topics:
+	-The two input topics and output topic must be created prior to running your application
+	-You may also wnat to purge the msgs in these topics occasionally during testing
+	-The starter code includes a script called "reset_topics.sh" that performs both functions
+		-It first deletes all 3 topics and then recreates them
+	-You may assume that each topic will have only one partition when your code is executed by the script
+-Resetting your application:
+	-Some stream processing applications use stateful operators, like count
+		-These operators maintain state in a fault-tolerant manner using Kafka state stores
+	-In additoin, Kafka keeps track of which messages have been consumed by your app
+	-You may want to reset this internal state prior to each run, which entails performing a local reset via the KafkaStreams class, as well as a gloabl reset via the "kafka-streams-applicaiton-reset.sh" utility provided in Kafka
+	-The starter code includes a script called "reset_app.sh" that performs both types of reset on your application
+	-Resetting the application is important because it may use stale internal state from a previous run
+-->If you want to start in the initial state, reset the topics and then reset the app
+-Producing inputs:
+	-The producer_student.sh and producer_classroom.sh scripts provided with the starter code are wrappers around the Kafka command line producer utility
+	-They allow you to enter key-value pairs into the input topics using the console
+	-The key and value are entered on one line, separated by a comma with no spaces around it
+	-Remember to shut the producers down before running reset_topics.sh or reset_app.sh, as otherwise the topics may not be reset correctly
+-Consuming ouptuts:
+	-The consumer.sh script provide with the starter code is a wrapper around the Kafka command line consumer utility
+	-It allows you to dump the output of your app to the console and to see that output in real time
+		-For ex, 4 windows, one w/ application running, 2 running the console producers for the input topic, and a fourth window which has the console consumer for your output topic
+			-As you are typing inputs into your input topics, you will in real time see outputs generated in the console of the console consumer
+	-Remember to shut the consumer down before running reset_topics.sh or reset_app.sh as otherwise the output topic may not be reset correctly
+
+Additional Guidelines
+-Use built-in Kafka Stream API features as much as possible instead of rolling your own code for fundamental stream operations
+-You may use the default state store for stateful stream operators
+	-Do NOT bypass Kafka's state store by storing data (Ex/ number of students in each classroom) in ordinary program variables, as they will not survive a crash
+-Setting the CACHE_MAX_BYTES_BUFFERING_CONFIG property to zero should ensure that the application produces input in a timely manner (ex/ around one second)
+	-This is done for you in the mainline of the starter code
+-Using Kafka correctly will ensure that your application is fault tolerant
+	-ONLY client failures will be simulated during grading (not Kafka server failures) using kill -9
