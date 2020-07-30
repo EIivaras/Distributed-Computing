@@ -63,6 +63,15 @@ public class A4Application {
 		KStream<String, String> studentLines = builder.stream(studentTopic);
 		KStream<String, String> classroomLines = builder.stream(classroomTopic);
 
+		// TODO:
+		// 1. Convert streams to tables (in a table, each key is only used once (previous records with a given key are deleted))
+		// 2. Left join tables on the student topic for the roomID (since not all rooms have a listed capacity)
+		// 3. Group by roomID and statefully store the count of students in each room
+		// 4. If the number is > than the listed capacity, provide output
+		// 5. If the previous count of students was > and the incoming is <=, provide "OK" output
+		// 		--> Maybe have a global KTable or something that lets us do this comparison
+		// Note: In the lecture notes, to convert from KStream to KTable you generally go: KStream -> KGroupedStream -> KTable, so might need to group before the join?
+
 		KTable<String, String> events = 
 		// ...
 		// ...to(outputTopic);
