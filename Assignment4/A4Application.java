@@ -61,7 +61,22 @@ public class A4Application {
 		// --> https://kafka.apache.org/21/javadoc/org/apache/kafka/streams/kstream/KStream.html
 
 		KStream<String, String> studentLines = builder.stream(studentTopic);
-		KStream<String, String> classroomLines = builder.stream(classroomTopic);
+		KTable<String, Long> roomsOccupancy = studentLines
+												.groupByKey()
+												// TO-DO: confirm reduce actually returns the latest value (is order preserved?)
+												.reduce((oldValue, newValue) -> newValue)
+												.groupBy((studentID, roomID) -> new KeyValue<String, String>(roomID, studentID))
+												.count();								
+
+		// KStream<String, String> classroomLines = builder.stream(classroomTopic);
+		// classroomLines
+		// 	.leftJoin(roomsOccupancy, (occupancy, capacity) -> occupancy - Long.parseLong(capacity))
+		// 	.groupByKey()
+		// 	.reduce((oldValue, newValue) -> {
+		// 		if (newValue > 0 && newValue > oldValue) {
+
+		// 		}
+		// 	})
 
 		// TODO:
 		// 1. Convert streams to tables (in a table, each key is only used once (previous records with a given key are deleted))
@@ -72,7 +87,20 @@ public class A4Application {
 		// 		--> Maybe have a global KTable or something that lets us do this comparison
 		// Note: In the lecture notes, to convert from KStream to KTable you generally go: KStream -> KGroupedStream -> KTable, so might need to group before the join?
 
-		KTable<String, String> events = 
+		// classroomsCapacity
+		// 	.leftJoin(roomsOccupancy, (occupancy, capacity) -> occupancy - Integer.parseInt(capacity))
+		// 	.
+			
+
+			// .reduce(new Reducer<Long>() {
+			// 	public Long countOccupants(Long newCount, Long oldCount) {
+			// 		if (newCount < oldCount) {
+			// 			System.out.println("A student left a class");
+			// 		}
+			// 		return newCount;
+			// 	}
+			// })
+
 		// ...
 		// ...to(outputTopic);
 
