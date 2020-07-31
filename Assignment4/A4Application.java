@@ -60,7 +60,15 @@ public class A4Application {
 		// Looks like we can join KStreams together? Maybe this is an approach we want to take?
 		// --> https://kafka.apache.org/21/javadoc/org/apache/kafka/streams/kstream/KStream.html
 
-		KStream<String, String> studentLines = builder.stream(studentTopic);
+		KStream<String, String> studentLines = builder.stream(studentTopic)
+			//.map((key, value) -> KeyValue.pair(value, key));
+			//.map(new KeyValueMapper<String, String, KeyValue<String, String>>() {
+			//	@Override
+			//	public KeyValue<String, String> apply(String key, String value) {
+			//		return new KeyValue<>(value, key);
+			//	}
+			//});
+			.map((key, value) -> new KeyValue<>((String) value, (String) key));
 		KStream<String, String> classroomLines = builder.stream(classroomTopic);
 
 		// TODO:
@@ -72,9 +80,12 @@ public class A4Application {
 		// 		--> Maybe have a global KTable or something that lets us do this comparison
 		// Note: In the lecture notes, to convert from KStream to KTable you generally go: KStream -> KGroupedStream -> KTable, so might need to group before the join?
 
-		KTable<String, String> events = 
-		// ...
-		// ...to(outputTopic);
+		// For comparing previous to new value: https://piazza.com/class/k9iodcgwo199w?cid=352 - KGroupedStream?
+
+		KTable<String, String> studentTable = studentLines.toTable();
+		KTable<String, String> classroomTable = classroomLines.toTable();
+		KTable<String, String> events = studentTable.leftJoin(classroomTable).to(outputTopic);
+
 
 		KafkaStreams streams = new KafkaStreams(builder.build(), props);
 
