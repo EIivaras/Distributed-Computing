@@ -12,6 +12,7 @@ import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.kstream.Serialized;
+import org.apache.kafka.streams.kstream.ValueTransformer;
 
 import java.util.Arrays;
 import java.util.Properties;
@@ -73,16 +74,30 @@ public class A4Application {
 			(leftValue, rightValue)	-> { 
 				if (leftValue != null && rightValue != null) {
 					if (leftValue > rightValue) { 
+						// Occupancy is greater than capacity
 						return String.valueOf(leftValue); 
-					} else { 
-						return ""; 
+					} else if (leftValue.equals(rightValue)) { 
+						// classRoom is full
+						return "OK"; 
 					} 
 				}
 				return "";
 			}
 		);
 
-		joined.toStream().filter((key, value) -> !value.equals("")).to(outputTopic);
+		joined.toStream()
+			  .groupByKey()
+			  .reduce((oldValue, newValue) -> {
+				  if (newValue.equals("OK") && oldValue.equals("")) {
+					  // previously, occupancy was less than capacity
+					  // now, occupancy is equal to capacity (classRoom is full, but we don't care)
+					  return oldValue;
+				  } 
+				  return newValue;
+			  })
+			  .toStream()
+			  .filter((key, value) -> !value.equals(""))
+			  .to(outputTopic);
 
 		KafkaStreams streams = new KafkaStreams(builder.build(), props);
 
