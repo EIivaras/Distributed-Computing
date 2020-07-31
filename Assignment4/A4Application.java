@@ -61,7 +61,7 @@ public class A4Application {
 												// TO-DO: confirm reduce actually returns the latest value (is order preserved?)
 												.reduce((oldValue, newValue) -> newValue) // a KTable that contains "update" records with unmodified keys, and values that represent the latest (rolling) aggregate for each key
 												.groupBy((studentID, roomID) -> new KeyValue<String, String>(roomID, studentID))
-												.count("occupancy-store");
+												.count();
 												
 		KStream<String, String> classroomLines = builder.stream(classroomTopic);
 
@@ -76,9 +76,9 @@ public class A4Application {
 					if (leftValue > rightValue) { 
 						// Occupancy is greater than capacity
 						return String.valueOf(leftValue); 
-					} else if (leftValue.equals(rightValue)) { 
+					} else if (leftValue <= rightValue) { 
 						// classRoom is full
-						return "OK"; 
+						return "PreOK"; 
 					} 
 				}
 				return "";
@@ -88,15 +88,20 @@ public class A4Application {
 		joined.toStream()
 			  .groupByKey()
 			  .reduce((oldValue, newValue) -> {
-				  if (newValue.equals("OK") && oldValue.equals("")) {
+				  if (newValue.equals("PreOK") && oldValue.equals("")) {
 					  // previously, occupancy was less than capacity
 					  // now, occupancy is equal to capacity (classRoom is full, but we don't care)
 					  return oldValue;
-				  } 
+				  } else if (newValue.equals("PreOK") && oldValue.equals("OK")) {
+					  // if the last value was OK, we don't have to print out OK again
+					  return "";
+				  }  else if (newValue.equals("PreOK")) {
+					  return "OK";
+				  }
 				  return newValue;
 			  })
 			  .toStream()
-			  .filter((key, value) -> !value.equals(""))
+			  .filter((key, value) -> !value.equals("") && !value.equals("PreOK"))
 			  .to(outputTopic);
 
 		KafkaStreams streams = new KafkaStreams(builder.build(), props);
