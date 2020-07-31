@@ -60,7 +60,7 @@ public class A4Application {
 												// TO-DO: confirm reduce actually returns the latest value (is order preserved?)
 												.reduce((oldValue, newValue) -> newValue) // a KTable that contains "update" records with unmodified keys, and values that represent the latest (rolling) aggregate for each key
 												.groupBy((studentID, roomID) -> new KeyValue<String, String>(roomID, studentID))
-												.count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("occupancy-store"));
+												.count("occupancy-store");
 												
 		KStream<String, String> classroomLines = builder.stream(classroomTopic);
 
