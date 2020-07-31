@@ -88,14 +88,11 @@ public class A4Application {
 		joined.toStream()
 			  .groupByKey()
 			  .reduce((oldValue, newValue) -> {
-				  if (newValue.equals("PreOK") && oldValue.equals("")) {
+				  if (newValue.equals("PreOK") && (oldValue.equals("") || oldValue.equals("PreOK") || oldValue.equals("OK"))) {
 					  // previously, occupancy was less than capacity
 					  // now, occupancy is equal to capacity (classRoom is full, but we don't care)
 					  return oldValue;
-				  } else if (newValue.equals("PreOK") && oldValue.equals("OK")) {
-					  // if the last value was OK, we don't have to print out OK again
-					  return "";
-				  }  else if (newValue.equals("PreOK")) {
+				  } else if (newValue.equals("PreOK")) {
 					  return "OK";
 				  }
 				  return newValue;
