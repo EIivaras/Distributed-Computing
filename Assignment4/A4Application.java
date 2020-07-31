@@ -11,6 +11,7 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.kstream.Serialized;
 
 import java.util.Arrays;
 import java.util.Properties;
@@ -65,36 +66,23 @@ public class A4Application {
 
 		KTable<String, Long> roomsCapacity = classroomLines
 												.map((key, value) -> KeyValue.pair(key, Long.parseLong(value)))
-												.groupByKey()
+												.groupByKey(Serialized.with(Serdes.String(), Serdes.Long()))
 												.reduce((oldValue, newValue) -> newValue);
 
-		//roomsOccupancy.leftJoin(roomsCapacity).to(outputTopic);
-		// classroomLines
-		// 	.leftJoin(roomsOccupancy, (occupancy, capacity) -> occupancy - Long.parseLong(capacity))
-		// 	.groupByKey()
-		// 	.reduce((oldValue, newValue) -> {
-		// 		if (newValue > 0 && newValue > oldValue) {
+		KTable <String, String> joined = roomsOccupancy.leftJoin(roomsCapacity,
+			(leftValue, rightValue)	-> { 
+				if (leftValue != null && rightValue != null) {
+					if (leftValue > rightValue) { 
+						return String.valueOf(leftValue); 
+					} else { 
+						return ""; 
+					} 
+				}
+				return "";
+			}
+		);
 
-		// 		}
-		// 	})
-
-
-		// classroomsCapacity
-		// 	.leftJoin(roomsOccupancy, (occupancy, capacity) -> occupancy - Integer.parseInt(capacity))
-		// 	.
-			
-
-			// .reduce(new Reducer<Long>() {
-			// 	public Long countOccupants(Long newCount, Long oldCount) {
-			// 		if (newCount < oldCount) {
-			// 			System.out.println("A student left a class");
-			// 		}
-			// 		return newCount;
-			// 	}
-			// })
-
-		// ...
-		// ...to(outputTopic);
+		joined.toStream().to(outputTopic);
 
 		KafkaStreams streams = new KafkaStreams(builder.build(), props);
 
