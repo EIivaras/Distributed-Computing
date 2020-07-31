@@ -56,12 +56,15 @@ public class A4Application {
 		// --> .count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("counts-store"));
 
 		KStream<String, String> studentLines = builder.stream(studentTopic);
-		KTable<String, Long> roomsOccupancy = studentLines
+		KTable<String, String> studentRooms = studentLines
 												.groupByKey()
-												// TO-DO: confirm reduce actually returns the latest value (is order preserved?)
-												.reduce((oldValue, newValue) -> newValue) // a KTable that contains "update" records with unmodified keys, and values that represent the latest (rolling) aggregate for each key
+												// TODO: confirm reduce actually returns the latest value (is order preserved?)
+												// a KTable that contains "update" records with unmodified keys, and values that represent the latest (rolling) aggregate for each key
+												.reduce((oldValue, newValue) -> newValue);
+		KTable<String, Long> roomsOccupancy = studentRooms
 												.groupBy((studentID, roomID) -> new KeyValue<String, String>(roomID, studentID))
 												.count();
+		
 												
 		KStream<String, String> classroomLines = builder.stream(classroomTopic);
 
