@@ -82,7 +82,7 @@ public class A4Application {
 			}
 		);
 
-		joined.toStream().to(outputTopic);
+		joined.toStream().filter((key, value) -> !value.equals("")).to(outputTopic);
 
 		KafkaStreams streams = new KafkaStreams(builder.build(), props);
 
