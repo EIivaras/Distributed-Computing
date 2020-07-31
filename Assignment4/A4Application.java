@@ -58,7 +58,6 @@ public class A4Application {
 		KStream<String, String> studentLines = builder.stream(studentTopic);
 		KTable<String, Long> roomsOccupancy = studentLines
 												.groupByKey()
-												// TO-DO: confirm reduce actually returns the latest value (is order preserved?)
 												.reduce((oldValue, newValue) -> newValue) // a KTable that contains "update" records with unmodified keys, and values that represent the latest (rolling) aggregate for each key
 												.groupBy((studentID, roomID) -> new KeyValue<String, String>(roomID, studentID))
 												.count();

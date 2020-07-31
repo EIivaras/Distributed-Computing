@@ -127,4 +127,4 @@ Final Notes:
     - All server nodes are capable of being the primary, so they need code to figure out which one they are
 
 # KILLING PROCESSES #
---> kill -9 $(pgrep -u userid java)
+--> kill -9 $(pgrep -u zwalford java)
