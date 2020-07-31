@@ -63,12 +63,12 @@ public class A4Application {
 												
 		KStream<String, String> classroomLines = builder.stream(classroomTopic);
 
-		// TODO: Do we need to convert "capacity" to a long?
-		KTable<String, String> roomsCapacity = classroomLines
+		KTable<String, Long> roomsCapacity = classroomLines
+												.map((key, value) -> KeyValue.pair(key, Long.parseLong(value)))
 												.groupByKey()
 												.reduce((oldValue, newValue) -> newValue);
 
-		roomsOccupancy.leftJoin(roomsCapacity).to(outputTopic);
+		//roomsOccupancy.leftJoin(roomsCapacity).to(outputTopic);
 		// classroomLines
 		// 	.leftJoin(roomsOccupancy, (occupancy, capacity) -> occupancy - Long.parseLong(capacity))
 		// 	.groupByKey()
