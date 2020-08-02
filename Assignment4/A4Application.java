@@ -56,49 +56,55 @@ public class A4Application {
 		// --> .count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("counts-store"));
 
 		KStream<String, String> studentLines = builder.stream(studentTopic);
-		KTable<String, Long> roomsOccupancy = studentLines
+		KTable<String, String> studentRooms = studentLines
 												.groupByKey()
-												.reduce((oldValue, newValue) -> newValue) // a KTable that contains "update" records with unmodified keys, and values that represent the latest (rolling) aggregate for each key
-												.groupBy((studentID, roomID) -> new KeyValue<String, String>(roomID, studentID))
-												.count();
-												
-		KStream<String, String> classroomLines = builder.stream(classroomTopic);
-
-		KTable<String, Long> roomsCapacity = classroomLines
-												.map((key, value) -> KeyValue.pair(key, Long.parseLong(value)))
-												.groupByKey(Serialized.with(Serdes.String(), Serdes.Long()))
+												// TODO: confirm reduce actually returns the latest value (is order preserved?)
+												// a KTable that contains "update" records with unmodified keys, and values that represent the latest (rolling) aggregate for each key
 												.reduce((oldValue, newValue) -> newValue);
 
-		KTable <String, String> joined = roomsOccupancy.leftJoin(roomsCapacity,
-			(leftValue, rightValue)	-> { 
-				if (leftValue != null && rightValue != null) {
-					if (leftValue > rightValue) { 
-						// Occupancy is greater than capacity
-						return String.valueOf(leftValue); 
-					} else if (leftValue <= rightValue) { 
-						// classRoom is full
-						return "PreOK"; 
-					} 
-				}
-				return "";
-			}
-		);
+		studentRooms.groupBy((studentID, roomID) -> new KeyValue<String, String>(roomID, studentID)).count().toStream().foreach((key,value) -> System.out.println(key + " : " + value));
 
-		joined.toStream()
-			  .groupByKey()
-			  .reduce((oldValue, newValue) -> {
-				  if (newValue.equals("PreOK") && (oldValue.equals("") || oldValue.equals("PreOK") || oldValue.equals("OK"))) {
-					  // previously, occupancy was less than capacity
-					  // now, occupancy is equal to capacity (classRoom is full, but we don't care)
-					  return oldValue;
-				  } else if (newValue.equals("PreOK")) {
-					  return "OK";
-				  }
-				  return newValue;
-			  })
-			  .toStream()
-			  .filter((key, value) -> !value.equals("") && !value.equals("PreOK"))
-			  .to(outputTopic);
+		//KTable<String, Long> roomsOccupancy = studentRooms
+		//										.groupBy((studentID, roomID) -> new KeyValue<String, String>(roomID, studentID));
+		//										.count();
+												
+		//KStream<String, String> classroomLines = builder.stream(classroomTopic);
+//
+		//KTable<String, Long> roomsCapacity = classroomLines
+		//										.map((key, value) -> KeyValue.pair(key, Long.parseLong(value)))
+		//										.groupByKey(Serialized.with(Serdes.String(), Serdes.Long()))
+		//										.reduce((oldValue, newValue) -> newValue);
+//
+		//KTable <String, String> joined = roomsOccupancy.leftJoin(roomsCapacity,
+		//	(leftValue, rightValue)	-> { 
+		//		if (leftValue != null && rightValue != null) {
+		//			if (leftValue > rightValue) { 
+		//				// Occupancy is greater than capacity
+		//				return String.valueOf(leftValue); 
+		//			} else if (leftValue <= rightValue) { 
+		//				// classRoom is full
+		//				return "PreOK"; 
+		//			} 
+		//		}
+		//		return "";
+		//	}
+		//);
+//
+		//joined.toStream()
+		//	  .groupByKey()
+		//	  .reduce((oldValue, newValue) -> {
+		//		  if (newValue.equals("PreOK") && (oldValue.equals("") || oldValue.equals("PreOK") || oldValue.equals("OK"))) {
+		//			  // previously, occupancy was less than capacity
+		//			  // now, occupancy is equal to capacity (classRoom is full, but we don't care)
+		//			  return oldValue;
+		//		  } else if (newValue.equals("PreOK")) {
+		//			  return "OK";
+		//		  }
+		//		  return newValue;
+		//	  })
+		//	  .toStream()
+		//	  .filter((key, value) -> !value.equals("") && !value.equals("PreOK"))
+		//	  .to(outputTopic);
 
 		KafkaStreams streams = new KafkaStreams(builder.build(), props);
 
