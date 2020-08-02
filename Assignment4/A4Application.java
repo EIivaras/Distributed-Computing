@@ -56,18 +56,16 @@ public class A4Application {
 		// --> .count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("counts-store"));
 
 		KStream<String, String> studentLines = builder.stream(studentTopic);
-		KTable<String, String> studentRooms = studentLines
+		KTable<String, Long> roomsOccupancy = studentLines
 												.groupByKey()
 												// TODO: confirm reduce actually returns the latest value (is order preserved?)
 												// a KTable that contains "update" records with unmodified keys, and values that represent the latest (rolling) aggregate for each key
-												.reduce((oldValue, newValue) -> newValue);
-		KTable<String, Long> roomsOccupancy = studentRooms
+												.reduce((oldValue, newValue) -> newValue)
 												.groupBy((studentID, roomID) -> new KeyValue<String, String>(roomID, studentID))
 												.count();
 		
 												
 		KStream<String, String> classroomLines = builder.stream(classroomTopic);
-
 		KTable<String, Long> roomsCapacity = classroomLines
 												.map((key, value) -> KeyValue.pair(key, Long.parseLong(value)))
 												.groupByKey(Serialized.with(Serdes.String(), Serdes.Long()))
@@ -94,7 +92,7 @@ public class A4Application {
 				  if (newValue.equals("PreOK") && (oldValue.equals("") || oldValue.equals("PreOK") || oldValue.equals("OK"))) {
 					  // previously, occupancy was less than capacity
 					  // now, occupancy is equal to capacity (classRoom is full, but we don't care)
-					  return oldValue;
+					  return "";
 				  } else if (newValue.equals("PreOK")) {
 					  return "OK";
 				  }
