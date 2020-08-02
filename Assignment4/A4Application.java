@@ -12,7 +12,6 @@ import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.kstream.Serialized;
-import org.apache.kafka.streams.kstream.ValueTransformer;
 
 import java.util.Arrays;
 import java.util.Properties;
@@ -36,75 +35,57 @@ public class A4Application {
 		props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
 		props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
 		props.put(StreamsConfig.STATE_DIR_CONFIG, stateStoreDir);
+		props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
 
 		// add code here if you need any additional configuration options
 
 		StreamsBuilder builder = new StreamsBuilder();
 
-
-		// TODO:
-		// 1. Convert streams to tables (in a table, each key is only used once (previous records with a given key are deleted))
-		// 2. Left join tables on the student topic for the roomID (since not all rooms have a listed capacity)
-		// 3. Group by roomID and statefully store the count of students in each room
-		// 4. If the number is > than the listed capacity, provide output
-		// 5. If the previous count of students was > and the incoming is <=, provide "OK" output
-		// 		--> Maybe have a global KTable or something that lets us do this comparison
-		// Note: In the lecture notes, to convert from KStream to KTable you generally go: KStream -> KGroupedStream -> KTable, so might need to group before the join?
-		
-		// Note: As in the lecture notes, if we "count" or something similar, make sure we do the counting in a stateful store
-		// Example does it like so:
-		// --> .count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("counts-store"));
-
 		KStream<String, String> studentLines = builder.stream(studentTopic);
-		KTable<String, String> studentRooms = studentLines
+		KTable<String, Long> roomsOccupancy = studentLines
 												.groupByKey()
-												// TODO: confirm reduce actually returns the latest value (is order preserved?)
 												// a KTable that contains "update" records with unmodified keys, and values that represent the latest (rolling) aggregate for each key
+												.reduce((oldValue, newValue) -> newValue)
+												.groupBy((studentID, roomID) -> new KeyValue<String, String>(roomID, studentID))
+												.count();
+		
+												
+		KStream<String, String> classroomLines = builder.stream(classroomTopic);
+		KTable<String, Long> roomsCapacity = classroomLines
+												.map((key, value) -> KeyValue.pair(key, Long.parseLong(value)))
+												.groupByKey(Serialized.with(Serdes.String(), Serdes.Long()))
 												.reduce((oldValue, newValue) -> newValue);
 
-		studentRooms.groupBy((studentID, roomID) -> new KeyValue<String, String>(roomID, studentID)).count().toStream().foreach((key,value) -> System.out.println(key + " : " + value));
+		KTable <String, String> joined = roomsOccupancy.leftJoin(roomsCapacity,
+			(leftValue, rightValue)	-> { 
+				if (leftValue != null && rightValue != null) {
+					if (leftValue > rightValue) { 
+						// Occupancy is greater than capacity
+						return String.valueOf(leftValue); 
+					} else if (leftValue <= rightValue) { 
+						// classRoom is full
+						return "PreOK"; 
+					} 
+				}
+				return "";
+			}
+		);
 
-		//KTable<String, Long> roomsOccupancy = studentRooms
-		//										.groupBy((studentID, roomID) -> new KeyValue<String, String>(roomID, studentID));
-		//										.count();
-												
-		//KStream<String, String> classroomLines = builder.stream(classroomTopic);
-//
-		//KTable<String, Long> roomsCapacity = classroomLines
-		//										.map((key, value) -> KeyValue.pair(key, Long.parseLong(value)))
-		//										.groupByKey(Serialized.with(Serdes.String(), Serdes.Long()))
-		//										.reduce((oldValue, newValue) -> newValue);
-//
-		//KTable <String, String> joined = roomsOccupancy.leftJoin(roomsCapacity,
-		//	(leftValue, rightValue)	-> { 
-		//		if (leftValue != null && rightValue != null) {
-		//			if (leftValue > rightValue) { 
-		//				// Occupancy is greater than capacity
-		//				return String.valueOf(leftValue); 
-		//			} else if (leftValue <= rightValue) { 
-		//				// classRoom is full
-		//				return "PreOK"; 
-		//			} 
-		//		}
-		//		return "";
-		//	}
-		//);
-//
-		//joined.toStream()
-		//	  .groupByKey()
-		//	  .reduce((oldValue, newValue) -> {
-		//		  if (newValue.equals("PreOK") && (oldValue.equals("") || oldValue.equals("PreOK") || oldValue.equals("OK"))) {
-		//			  // previously, occupancy was less than capacity
-		//			  // now, occupancy is equal to capacity (classRoom is full, but we don't care)
-		//			  return oldValue;
-		//		  } else if (newValue.equals("PreOK")) {
-		//			  return "OK";
-		//		  }
-		//		  return newValue;
-		//	  })
-		//	  .toStream()
-		//	  .filter((key, value) -> !value.equals("") && !value.equals("PreOK"))
-		//	  .to(outputTopic);
+		joined.toStream()
+			  .groupByKey()
+			  .reduce((oldValue, newValue) -> {
+				  if (newValue.equals("PreOK") && (oldValue.equals("") || oldValue.equals("PreOK") || oldValue.equals("OK"))) {
+					  // previously, occupancy was less than capacity
+					  // now, occupancy is equal to capacity (classRoom is full, but we don't care)
+					  return "";
+				  } else if (newValue.equals("PreOK")) {
+					  return "OK";
+				  }
+				  return newValue;
+			  })
+			  .toStream()
+			  .filter((key, value) -> !value.equals("") && !value.equals("PreOK"))
+			  .to(outputTopic);
 
 		KafkaStreams streams = new KafkaStreams(builder.build(), props);
 
